@@ -1,6 +1,3 @@
-# Package
-package
-
 # Project
 Documentation/
 References/
@@ -8,6 +5,7 @@ Captures/
 Engine/
 Tools/.venv/
 Plugin/Release
+Plugin/Packages
 Build/
 
 *.code-workspace
