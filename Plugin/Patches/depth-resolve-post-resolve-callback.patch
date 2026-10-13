@@ -1,0 +1,42 @@
+diff --git a/DepthResolve/main.cpp b/DepthResolve/main.cpp
+index d3541b1..7dd2fd2 100644
+--- a/DepthResolve/main.cpp
++++ b/DepthResolve/main.cpp
+@@ -32,6 +32,10 @@ static bool bNVAPI;
+ 
+ static std::vector<ImageSpaceEffect*> kPostDepthEffects;
+ 
++// Called right after the pre-water depth resolve, while the scene render target is still bound.
++typedef void(__cdecl* PostResolveDepthCallback)(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture);
++static std::vector<PostResolveDepthCallback> kPostResolveDepthCallbacks;
++
+ class BSShaderManagerEx {
+ public:
+ 	static NiTexturePtr spINTZDepthTexture;
+@@ -118,6 +122,12 @@ public:
+ 		if (apAccumulator->bSetupWaterRefractionDepth && pISTexture) {
+ 			ResolveDepth(apAccumulator, pISTexture);
+ 
++			if (!kPostResolveDepthCallbacks.empty()) {
++				IDirect3DBaseTexture9* pDepthTexture = BSShaderManagerEx::GetINTZDepthTexture(0, 0)->GetDX9RendererData()->GetD3DTexture();
++				for (const auto& pCallback : kPostResolveDepthCallbacks)
++					pCallback(apAccumulator, pISTexture, pDepthTexture);
++			}
++
+ 			if (!kPostDepthEffects.empty()) {
+ 				BSRenderedTexture::StopOffscreen();
+ 				for (const auto& pEffect : kPostDepthEffects) {
+@@ -373,6 +383,13 @@ EXTERN_DLL_EXPORT void __cdecl AppendPostDepthEffect(ImageSpaceEffect* apEffect)
+ 	kPostDepthEffects.push_back(apEffect);
+ }
+ 
++EXTERN_DLL_EXPORT void __cdecl RegisterPostResolveDepthCallback(PostResolveDepthCallback apCallback) {
++	if (!apCallback || std::find(kPostResolveDepthCallbacks.begin(), kPostResolveDepthCallbacks.end(), apCallback) != kPostResolveDepthCallbacks.end())
++		return;
++
++	kPostResolveDepthCallbacks.push_back(apCallback);
++}
++
+ EXTERN_DLL_EXPORT bool NVSEPlugin_Query(const NVSEInterface* nvse, PluginInfo* info) {
+ 	info->infoVersion = PluginInfo::kInfoVersion;
+ 	info->name = "Depth Resolve";
