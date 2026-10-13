@@ -1,0 +1,29 @@
+#pragma once
+
+#include "NiPlane.hpp"
+#include "NiTransform.hpp"
+#include "NiFrustum.hpp"
+
+class NiCamera;
+
+class NiFrustumPlanes {
+public:
+	NiFrustumPlanes() {
+		m_uiActivePlanes = 63;
+	}
+
+	enum ActivePlanes {
+		NEAR_PLANE		= 0,
+		FAR_PLANE		= 1,
+		LEFT_PLANE		= 2,
+		RIGHT_PLANE		= 3,
+		TOP_PLANE		= 4,
+		BOTTOM_PLANE	= 5,
+		MAX_PLANES		= 6
+	};
+
+	NiPlane		m_akCullingPlanes[MAX_PLANES];
+	uint32_t	m_uiActivePlanes;
+};
+
+ASSERT_SIZE(NiFrustumPlanes, 0x64);
