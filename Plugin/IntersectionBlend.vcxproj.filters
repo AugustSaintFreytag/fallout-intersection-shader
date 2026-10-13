@@ -1,0 +1,691 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="External">
+      <UniqueIdentifier>{61BDA582-01C3-5F93-8B06-888F3FE2E6AC}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\Game">
+      <UniqueIdentifier>{3A0F0471-906B-59B9-8701-45E5F1DF334E}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\Game\Bethesda">
+      <UniqueIdentifier>{30B326B1-07AB-5691-AF37-5F6B9A420AFF}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\Game\Gamebryo">
+      <UniqueIdentifier>{D529FEBF-0998-53B4-8E8E-1561D5CF5173}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\Misc">
+      <UniqueIdentifier>{DA51138E-219B-5F9F-A363-72AB126D8ACE}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\NVSE">
+      <UniqueIdentifier>{9E843F4B-7EB1-54ED-B75F-10A483795463}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\Shared">
+      <UniqueIdentifier>{3BA5911C-B216-5AA1-B4F5-2D0D374A7D5B}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\Shared\SafeWrite">
+      <UniqueIdentifier>{958724C9-0F4B-5C59-A7BD-916EBA0A1033}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="External\Shared\Utils">
+      <UniqueIdentifier>{72566BEA-EAFD-5F7C-B34A-EB55DD167F28}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders">
+      <UniqueIdentifier>{FC3EDBA2-B897-5928-A0A9-C706F1AB0199}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders\DebugViews">
+      <UniqueIdentifier>{5711A9BB-D5EB-5C70-A684-8AE185867BF8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders\Includes">
+      <UniqueIdentifier>{519A3810-31CC-598A-940F-B9621A0DAC02}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders\Terrain">
+      <UniqueIdentifier>{57C38C30-06F3-5911-B49C-1947EE6C580D}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders\Terrain\Parallax">
+      <UniqueIdentifier>{76D26231-65E9-5B00-80F8-7B4290C3CECD}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders\Terrain\VPT">
+      <UniqueIdentifier>{7B68E0C1-ACE0-5654-A8FD-06AECCED2051}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Source">
+      <UniqueIdentifier>{E25FDF9A-E54E-5571-A8F0-D1ECF6236D1E}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="External\Shared\SafeWrite\SafeWrite.cpp">
+      <Filter>External\Shared\SafeWrite</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Shared\Utils\DebugLog.cpp">
+      <Filter>External\Shared\Utils</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Bethesda\BSMemory.cpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Bethesda\BSRenderedTexture.cpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Bethesda\BSRenderState.cpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Bethesda\BSShaderAccumulator.cpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Bethesda\BSShaderManager.cpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Bethesda\BSTextureManager.cpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Bethesda\ImageSpaceManager.cpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Bethesda\ImageSpaceShaderParam.cpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Bethesda\ImageSpaceTexture.cpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Bethesda\TESMain.cpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiAVObject.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiD3DTextureStage.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiDX9Renderer.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiDX9TextureData.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiFixedString.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiGlobalStringTable.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiMatrix3.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiMemManager.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiMemObject.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiMemory.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiObject.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiObjectNET.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiPoint3.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiPoint4.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiRefObject.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiRenderer.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Game\Gamebryo\NiTexture.cpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClCompile>
+    <ClCompile Include="External\Misc\BSD3DTexture.cpp">
+      <Filter>External\Misc</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\main.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Dependencies.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\OverlayPass.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\Settings.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\TerrainPasses.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Source\Dependencies.hpp">
+      <Filter>Source</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\OverlayPass.hpp">
+      <Filter>Source</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Settings.hpp">
+      <Filter>Source</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\TerrainPasses.hpp">
+      <Filter>Source</Filter>
+    </ClInclude>
+    <ClInclude Include="External\NVSE\nvse_version.h">
+      <Filter>External\NVSE</Filter>
+    </ClInclude>
+    <ClInclude Include="External\NVSE\PluginAPI.h">
+      <Filter>External\NVSE</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Shared\Defines.hpp">
+      <Filter>External\Shared</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Shared\SafeWrite\SafeWrite.hpp">
+      <Filter>External\Shared\SafeWrite</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Shared\Utils\AddressPtr.hpp">
+      <Filter>External\Shared\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Shared\Utils\Bitfield.hpp">
+      <Filter>External\Shared\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Shared\Utils\DebugLog.hpp">
+      <Filter>External\Shared\Utils</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSBatchRenderer.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSGraphics.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSMemObject.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSMemory.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSRenderedTexture.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSRenderState.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSSceneGraph.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSShader.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSShaderAccumulator.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSShaderLightingProperty.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSShaderManager.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSShaderPPLightingProperty.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSShaderProperty.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSShaderTextureSet.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSSimpleArray.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSString.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSTextureManager.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\BSTextureSet.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\ImageSpaceBaseData.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\ImageSpaceEffect.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\ImageSpaceEffectDepthOfField.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\ImageSpaceEffectParam.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\ImageSpaceManager.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\ImageSpaceShaderParam.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\ImageSpaceTexture.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\NiUpdateData.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\SceneGraph.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Bethesda\TESMain.hpp">
+      <Filter>External\Game\Bethesda</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\Ni2DBuffer.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiAccumulator.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiAdditionalGeometryData.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiAllocator.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiAlphaAccumulator.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiAlphaProperty.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiAVObject.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiAVObjectPalette.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiBackToFrontAccumulator.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiBinaryStream.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiBound.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiCamera.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiCloningProcess.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiCollisionObject.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiColor.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiColorA.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiCriticalSection.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiCullingProperty.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DDefaultShader.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DPass.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DPixelShader.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DRenderState.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DRenderStateGroup.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DRSEntry.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DShader.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DShaderConstantMap.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DShaderDeclaration.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DShaderInterface.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DShaderLibraryVersion.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DShaderProgram.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DTextureStage.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DTextureStageGroup.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiD3DVertexShader.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiDepthStencilBuffer.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiDirectionalLight.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiDX9MaterialManager.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiDX9Renderer.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiDX9RenderState.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiDX9ShaderDeclaration.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiDX9TextureData.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiDynamicEffect.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiDynamicEffectState.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiExtraData.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiFile.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiFixedString.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiFogProperty.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiFrustum.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiFrustumPlanes.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiGeometry.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiGeometryBufferData.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiGeometryData.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiGeometryGroupManager.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiGlobalStringTable.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiGPUProgram.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiLight.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiMaterialProperty.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiMatrix3.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiMemManager.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiMemObject.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiMemory.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiNode.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiObject.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiObjectNET.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiPalette.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiPersistentSrcTextureRendererData.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiPixelData.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiPixelFormat.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiPlane.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiPoint2.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiPoint3.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiPoint4.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiPointLight.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiProperty.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiPropertyState.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiQuaternion.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiRect.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiRefObject.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiRenderedCubeMap.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiRenderedTexture.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiRenderer.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiRenderTargetGroup.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiRTTI.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiShadeProperty.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiShader.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiShaderAttributeDesc.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiShaderConstantMap.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiShaderConstantMapEntry.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NIShaderDeclaration.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiShaderDescBase.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiSkinData.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiSkinInstance.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiSkinPartition.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiSmartPointer.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiSourceCubemap.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiSourceTexture.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiSpotLight.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiStencilProperty.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTAbstractPoolAllocator.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTArray.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTDefaultAllocator.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTexture.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTexturingProperty.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTLargeArray.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTList.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTListBase.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTMallocInterface.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTMap.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTMapBase.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTNewInterface.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTPointerAllocator.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTPointerList.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTPointerListBase.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTPointerMap.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTransform.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTriBasedGeom.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTriBasedGeomData.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTriShape.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTriShapeData.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTriStrips.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTriStripsData.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTriStripsDynamicData.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTSet.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiTStringMap.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiVBBlock.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiVBChip.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiVBDynamicSet.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiVBSet.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Game\Gamebryo\NiVisibleArray.hpp">
+      <Filter>External\Game\Gamebryo</Filter>
+    </ClInclude>
+    <ClInclude Include="External\Misc\BSD3DTexture.hpp">
+      <Filter>External\Misc</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="packages.config" />
+    <None Include="IntersectionBlend.ini" />
+    <None Include="..\Shaders\Includes\TerrainOverlay.hlsli">
+      <Filter>Shaders\Includes</Filter>
+    </None>
+    <None Include="..\Shaders\Terrain\VPT\TerrainTemplate.hlsl">
+      <Filter>Shaders\Terrain\VPT</Filter>
+    </None>
+    <None Include="..\Shaders\Terrain\Parallax\TerrainTemplate.hlsl">
+      <Filter>Shaders\Terrain\Parallax</Filter>
+    </None>
+    <None Include="..\Shaders\DebugViews\DebugDepth.hlsl">
+      <Filter>Shaders\DebugViews</Filter>
+    </None>
+    <None Include="..\Shaders\Includes\Depth.hlsli">
+      <Filter>Shaders\Includes</Filter>
+    </None>
+    <None Include="..\Shaders\Includes\IntersectionBlend.hlsli">
+      <Filter>Shaders\Includes</Filter>
+    </None>
+    <None Include="..\Shaders\compile.ps1">
+      <Filter>Shaders</Filter>
+    </None>
+  </ItemGroup>
+</Project>
