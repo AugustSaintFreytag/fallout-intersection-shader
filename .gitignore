@@ -1,0 +1,13 @@
+# Package
+package
+
+# Project
+Documentation/
+References/
+Captures/
+Engine/
+Tools/.venv/
+Plugin/Release
+Build/
+
+*.code-workspace
