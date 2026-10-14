@@ -12,5 +12,9 @@ namespace OverlayPass {
 	// Call once the D3D device exists (NVSE DeferredInit).
 	void Initialize();
 
+	// Call once per main loop iteration, before the frame is rendered. Logs changes in the render flow, such as
+	// frames without a post-resolve callback while the game is paused.
+	void OnMainLoop();
+
 	void __cdecl OnPostResolveDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture);
 }

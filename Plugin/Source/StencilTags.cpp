@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <memory>
 #include <unordered_set>
+#include <utility>
 
 namespace StencilTags {
 	ASSERT_OFFSET(BSShaderAccumulator, eRenderMode, 0x19C);
@@ -45,6 +46,7 @@ namespace StencilTags {
 	static std::unordered_set<uint32_t>			kBlacklist;
 	static std::unique_ptr<ForcedRenderStates>	pTaggingStates;
 	static const BSRenderedTexture*				pTaggedTarget		= nullptr;
+	static uint32_t								uiTaggedStages		= 0;
 
 	// The last pass's geometry and verdict. Lit geometry draws one pass per light group, back to back.
 	static const NiGeometry*					pLastGeometry		= nullptr;
@@ -128,6 +130,7 @@ namespace StencilTags {
 
 		pTaggedTarget	= BSShaderManager::GetCurrentRenderTarget();
 		pLastGeometry	= nullptr;
+		uiTaggedStages++;
 	}
 
 	static void EndTagging() {
@@ -192,6 +195,10 @@ namespace StencilTags {
 		// Draws outside the batch renderer (sky, LOD) must not inherit the tag.
 		if (pTaggingStates)
 			pTaggingStates->Update(D3DRS_STENCILREF, 0);
+	}
+
+	uint32_t ConsumeTaggedStageCount() {
+		return std::exchange(uiTaggedStages, 0);
 	}
 
 	bool HasTags(const BSRenderedTexture* apTarget) {

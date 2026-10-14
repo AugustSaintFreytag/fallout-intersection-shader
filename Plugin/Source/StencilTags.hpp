@@ -26,6 +26,9 @@ namespace StencilTags {
 	bool BeginPass(const void* apRenderPass);
 	void EndPass();
 
+	// Number of opaque stages tagged since the last call. For diagnostics.
+	uint32_t ConsumeTaggedStageCount();
+
 	// Whether apTarget's stencil buffer holds tags from this frame's opaque stage.
 	bool HasTags(const BSRenderedTexture* apTarget);
 

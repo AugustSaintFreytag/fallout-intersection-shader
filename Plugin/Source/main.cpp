@@ -3,6 +3,7 @@
 
 #include "Dependencies.hpp"
 #include "OverlayPass.hpp"
+#include "RenderStates.hpp"
 #include "Settings.hpp"
 #include "StencilTags.hpp"
 #include "TerrainPasses.hpp"
@@ -20,11 +21,14 @@ static PluginHandle				uiPluginHandle	= 0;
 static void MessageHandler(NVSEMessagingInterface::Message* apMessage) {
 	switch (apMessage->type) {
 		case NVSEMessagingInterface::kMessage_DeferredInit:
+			// After every plugin's load, so the hook chains to LOD Flicker Fix's.
+			RenderStates::InstallHook();
 			StencilTags::LoadSelection();
 			OverlayPass::Initialize();
 			break;
 		case NVSEMessagingInterface::kMessage_MainGameLoop:
 			// Runs before the frame is rendered. Drops passes of a frame whose depth callback never came.
+			OverlayPass::OnMainLoop();
 			TerrainPasses::Clear();
 			break;
 	}

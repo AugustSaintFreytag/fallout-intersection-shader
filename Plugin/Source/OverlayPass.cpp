@@ -13,6 +13,7 @@
 #include "Gamebryo/NiDX9Renderer.hpp"
 
 #include <algorithm>
+#include <utility>
 #include <vector>
 
 namespace OverlayPass {
@@ -35,6 +36,7 @@ namespace OverlayPass {
 	static bool							bDebugReady				= false;
 	static bool							bOverlayShadersReady	= false;
 	static uint32_t						uiLoggedFrames			= 0;
+	static uint32_t						uiFrameCallbacks		= 0;
 
 	// The overlay needs our terrain shaders. With the original ones the replay would paint plain terrain over everything.
 	static bool CheckOverlayShaders() {
@@ -69,7 +71,7 @@ namespace OverlayPass {
 		bOverlayShadersReady = CheckOverlayShaders();
 		if (bOverlayShadersReady)
 			_MESSAGE("Terrain overlay shaders found");
-		StencilTags::SetEnabled(bOverlayShadersReady || Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS);
+		StencilTags::SetEnabled(Settings::bStencilTags && (bOverlayShadersReady || Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS));
 
 		pDebugVS = Dependencies::CreateVertexShader("IntersectionBlend\\DebugDepth.vso");
 		pDebugPS = Dependencies::CreatePixelShader("IntersectionBlend\\DebugDepth.pso");
@@ -110,7 +112,7 @@ namespace OverlayPass {
 
 		// Nothing in the game uses these registers, so they bypass the game's constant caches.
 		float fConstants[OVERLAY_CONSTANT_COUNT][4] = {
-			{ OVERLAY_MAGIC, static_cast<float>(Settings::eDebugMode), Settings::fMaxRayGap, 0.0f },
+			{ OVERLAY_MAGIC, static_cast<float>(Settings::eDebugMode), Settings::fMaxRayGap, Settings::bLipping ? 1.0f : 0.0f },
 			{},
 			{ 1.0f / kViewport.Width, 1.0f / kViewport.Height, Settings::fBlendRange, Settings::fMaxDistance },
 		};
@@ -140,15 +142,20 @@ namespace OverlayPass {
 			kStates.Force(D3DRS_ZENABLE, D3DZB_FALSE);
 			kStates.Force(D3DRS_ZWRITEENABLE, FALSE);
 			// Only over pixels of statics tagged during the opaque stage. D3D9 runs the stencil test with the depth test off.
-			kStates.Force(D3DRS_STENCILENABLE, TRUE);
-			kStates.Force(D3DRS_TWOSIDEDSTENCILMODE, FALSE);
-			kStates.Force(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
-			kStates.Force(D3DRS_STENCILREF, StencilTags::TERRAIN_BLEND_BIT);
-			kStates.Force(D3DRS_STENCILMASK, StencilTags::TERRAIN_BLEND_BIT);
-			kStates.Force(D3DRS_STENCILWRITEMASK, 0);
-			kStates.Force(D3DRS_STENCILPASS, D3DSTENCILOP_KEEP);
-			kStates.Force(D3DRS_STENCILFAIL, D3DSTENCILOP_KEEP);
-			kStates.Force(D3DRS_STENCILZFAIL, D3DSTENCILOP_KEEP);
+			if (Settings::bStencilTags) {
+				kStates.Force(D3DRS_STENCILENABLE, TRUE);
+				kStates.Force(D3DRS_TWOSIDEDSTENCILMODE, FALSE);
+				kStates.Force(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
+				kStates.Force(D3DRS_STENCILREF, StencilTags::TERRAIN_BLEND_BIT);
+				kStates.Force(D3DRS_STENCILMASK, StencilTags::TERRAIN_BLEND_BIT);
+				kStates.Force(D3DRS_STENCILWRITEMASK, 0);
+				kStates.Force(D3DRS_STENCILPASS, D3DSTENCILOP_KEEP);
+				kStates.Force(D3DRS_STENCILFAIL, D3DSTENCILOP_KEEP);
+				kStates.Force(D3DRS_STENCILZFAIL, D3DSTENCILOP_KEEP);
+			}
+			else {
+				kStates.Force(D3DRS_STENCILENABLE, FALSE);
+			}
 			kStates.Force(D3DRS_ALPHATESTENABLE, FALSE);
 			kStates.Force(D3DRS_ADAPTIVETESS_Y, 0); // Alpha to coverage, NVIDIA only.
 			kStates.Force(D3DRS_ALPHABLENDENABLE, TRUE);
@@ -239,7 +246,37 @@ namespace OverlayPass {
 		pStateBlock->Release();
 	}
 
+	void OnMainLoop() {
+		static constexpr uint32_t MAX_LOG_LINES = 200;
+
+		static uint32_t uiLoop		= 0;
+		static uint32_t uiLogLines	= 0;
+		static bool		bRendering	= false;
+
+		uiLoop++;
+		const uint32_t uiCallbacks		= std::exchange(uiFrameCallbacks, 0);
+		const uint32_t uiTaggedStages	= StencilTags::ConsumeTaggedStageCount();
+		if (uiLogLines >= MAX_LOG_LINES || uiLoop == 1)
+			return;
+
+		if (uiCallbacks == 0 && bRendering) {
+			_MESSAGE("Loop %u: no post-resolve callback this frame (%u tagged stages), world rendering paused?", uiLoop, uiTaggedStages);
+			uiLogLines++;
+		}
+		else if (uiCallbacks && !bRendering) {
+			_MESSAGE("Loop %u: post-resolve callbacks resumed (%u callbacks, %u tagged stages)", uiLoop, uiCallbacks, uiTaggedStages);
+			uiLogLines++;
+		}
+		else if (uiCallbacks > 1 || uiTaggedStages > 1 || uiTaggedStages != uiCallbacks) {
+			_MESSAGE("Loop %u: %u post-resolve callbacks, %u tagged stages", uiLoop, uiCallbacks, uiTaggedStages);
+			uiLogLines++;
+		}
+		bRendering = uiCallbacks != 0;
+	}
+
 	void __cdecl OnPostResolveDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture) {
+		uiFrameCallbacks++;
+
 		if (!Settings::bEnabled || !apAccumulator || !apAccumulator->m_pkCamera || !apDepthTexture) {
 			TerrainPasses::Clear();
 			return;
@@ -251,7 +288,7 @@ namespace OverlayPass {
 		const bool bTagged = StencilTags::HasTags(apTarget);
 
 		uint32_t uiPasses = 0;
-		if (bOverlayShadersReady && bTagged)
+		if (bOverlayShadersReady && (bTagged || !Settings::bStencilTags))
 			uiPasses = RenderTerrainOverlay(pDevice, apAccumulator->m_pkCamera, apTarget, apDepthTexture);
 		TerrainPasses::Clear();
 
