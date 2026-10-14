@@ -1,4 +1,5 @@
-# Reads vertex positions and TEXCOORD0 of terrain draws and fits uv = A * pos.xy + b (capture 02: uv = model.xy / 256, + 8 on negative quadrants).
+# Reads vertex positions and TEXCOORD0 of terrain draws and fits uv = A * pos.xy + b.
+# Capture 02 gives uv = model.xy / 256, plus 8 on negative quadrants.
 # Runs inside qrenderdoc: $env:RD_CAPTURE, $env:RD_OUT, $env:RD_EIDS = "<comma-separated event ids>"; qrenderdoc.exe --python rd_uv.py
 import os, struct, traceback
 import renderdoc as rd
@@ -81,7 +82,7 @@ def main():
             a, b, c, r = fit(xs, ys, [t[k] for p, t in pts])
             L("  uv%d = %.8f*x + %.8f*y + %.6f, max residual %.6g" % (k, a, b, c, r))
 
-        # World placement: the VS constant ModelViewProj alone does not give it, so log the model matrix if reflected.
+        # The VS constant ModelViewProj alone does not give the world placement. Log the model matrix if reflected.
     L("done")
 
 try:

@@ -1,6 +1,6 @@
 # Probes one draw of a RenderDoc capture: bound pixel shader textures with their binding slots, the pixel shader's
 # constants, an 8x8 grid of the bound 1024x1024 texture (the height field), and the draw's output and input depth at
-# a few screen positions. Written for the ground pass; adjust the positions and texture picks for other draws.
+# a few screen positions. Written for the ground pass. Adjust the positions and texture picks for other draws.
 # Runs inside qrenderdoc (embedded Python):
 #   $env:RD_CAPTURE = "<capture.rdc>"; $env:RD_OUT = "<out.txt>"; $env:RD_EID = "<event id>"
 #   & "C:\Program Files\RenderDoc\qrenderdoc.exe" --python rd_probe.py
@@ -47,7 +47,7 @@ def main():
     for i, r in enumerate(refl0.readOnlyResources):
         L("reflection ro", i, r.name, "fixedBindNumber", r.fixedBindNumber, "fixedBindSetOrSpace", r.fixedBindSetOrSpace)
 
-    # Constants.
+    # Constants
     stage = rd.ShaderStage.Pixel
     refl = pipe.GetShaderReflection(stage)
     for i, cb in enumerate(refl.constantBlocks):
@@ -57,7 +57,7 @@ def main():
         L("cbuffer", i, cb.name)
         dumpvars(vars, "  ")
 
-    # Height field contents on a grid.
+    # Height Field Contents on a Grid
     textures = [u.descriptor.resource for u in ro]
     field = [r for r in textures if texinfo.get(int(r)) and texinfo[int(r)].width == 1024]
     if field:
@@ -73,7 +73,7 @@ def main():
             L("  ", row)
         L("nonzero samples", nonzero)
 
-    # Ground pass inputs and output at a few screen positions.
+    # Ground Pass Inputs and Output at a Few Screen Positions
     out = pipe.GetOutputTargets()[0].resource
     depth = [r for r in textures if texinfo.get(int(r)) and texinfo[int(r)].width != 1024]
     ctrl.SetFrameEvent(EID + 1, True)
