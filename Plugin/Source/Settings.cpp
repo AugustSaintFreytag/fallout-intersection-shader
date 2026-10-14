@@ -96,6 +96,8 @@ namespace Settings {
 
 	void Load() {
 		bEnabled				= GetUInt("Main", "bEnabled", bEnabled) != 0;
+		bStencilTags			= GetUInt("Main", "bStencilTags", bStencilTags) != 0;
+		bLipping				= GetUInt("Blend", "bLipping", bLipping) != 0;
 		fMaxDistance			= GetFloat("Blend", "fMaxDistance", fMaxDistance);
 		fBlendRange				= GetFloat("Blend", "fBlendRange", fBlendRange);
 		fMaxRayGap				= GetFloat("Blend", "fMaxRayGap", fMaxRayGap);
@@ -103,6 +105,7 @@ namespace Settings {
 		kTerrainBlendBlacklist	= GetFormList("TerrainBlendBlacklist");
 		eDebugMode				= static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
 
+		_MESSAGE("Settings: stencil tags %u, lipping %u", bStencilTags, bLipping);
 		_MESSAGE("Settings: enabled %u, max distance %.1f, blend range %.1f, max ray gap %.1f, %u terrain blend types, %u blacklist entries, debug mode %u",
 			bEnabled, fMaxDistance, fBlendRange, fMaxRayGap, static_cast<uint32_t>(kTerrainBlendTypes.size()), static_cast<uint32_t>(kTerrainBlendBlacklist.size()), eDebugMode);
 	}

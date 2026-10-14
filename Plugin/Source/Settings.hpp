@@ -18,6 +18,8 @@ namespace Settings {
 	};
 
 	inline bool						bEnabled				= true;
+	inline bool						bStencilTags			= true;		// Off: the overlay covers everything on the ground, as before milestone 3.
+	inline bool						bLipping				= true;		// Off: the overlay shades the terrain behind the surface, as before.
 	inline float					fMaxDistance			= 4096.0f;	// Game units (~58 m).
 	inline float					fBlendRange				= 24.0f;	// Game units (~35 cm).
 	inline float					fMaxRayGap				= 128.0f;	// Game units (~1.8 m).
