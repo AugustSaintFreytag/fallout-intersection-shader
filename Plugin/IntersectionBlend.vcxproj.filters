@@ -150,6 +150,9 @@
     <ClCompile Include="Source\OverlayPass.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Source\RenderStates.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Settings.cpp">
       <Filter>Source</Filter>
     </ClCompile>

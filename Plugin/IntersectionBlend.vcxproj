@@ -172,6 +172,7 @@ copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plu
     <ClCompile Include="Source\main.cpp" />
     <ClCompile Include="Source\Dependencies.cpp" />
     <ClCompile Include="Source\OverlayPass.cpp" />
+    <ClCompile Include="Source\RenderStates.cpp" />
     <ClCompile Include="Source\Settings.cpp" />
     <ClCompile Include="Source\StencilTags.cpp" />
     <ClCompile Include="Source\TerrainPasses.cpp" />
