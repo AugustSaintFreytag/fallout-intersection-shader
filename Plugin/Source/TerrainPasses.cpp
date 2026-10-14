@@ -1,5 +1,7 @@
 #include "TerrainPasses.hpp"
 
+#include "StencilTags.hpp"
+
 #include "Bethesda/BSShaderManager.hpp"
 
 #include <vector>
@@ -32,7 +34,10 @@ namespace TerrainPasses {
 		if (auiPassType >= FIRST_LANDSCAPE_PASS && auiPassType <= LAST_LANDSCAPE_PASS)
 			kRecordedPasses.push_back({ apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4, BSShaderManager::GetCurrentRenderTarget() });
 
+		const bool bTagged = StencilTags::BeginPass(apRenderPass);
 		reinterpret_cast<RenderPassFn>(kRenderPassDetour.GetOverwrittenAddr())(apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4);
+		if (bTagged)
+			StencilTags::EndPass();
 	}
 
 	void InstallHooks() {

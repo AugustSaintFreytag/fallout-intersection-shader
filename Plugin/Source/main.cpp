@@ -4,6 +4,7 @@
 #include "Dependencies.hpp"
 #include "OverlayPass.hpp"
 #include "Settings.hpp"
+#include "StencilTags.hpp"
 #include "TerrainPasses.hpp"
 
 BS_ALLOCATORS
@@ -19,6 +20,7 @@ static PluginHandle				uiPluginHandle	= 0;
 static void MessageHandler(NVSEMessagingInterface::Message* apMessage) {
 	switch (apMessage->type) {
 		case NVSEMessagingInterface::kMessage_DeferredInit:
+			StencilTags::LoadSelection();
 			OverlayPass::Initialize();
 			break;
 		case NVSEMessagingInterface::kMessage_MainGameLoop:
@@ -49,6 +51,7 @@ EXTERN_DLL_EXPORT bool NVSEPlugin_Load(NVSEInterface* nvse) {
 	pMsgInterface->RegisterListener(uiPluginHandle, "NVSE", MessageHandler);
 
 	TerrainPasses::InstallHooks();
+	StencilTags::InstallHooks();
 	Dependencies::RegisterPostResolveDepthCallback(OverlayPass::OnPostResolveDepth);
 
 	return true;

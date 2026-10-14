@@ -1,5 +1,6 @@
-// Fullscreen debug view of the depth Depth Resolve hands to the overlay pass.
-// Tints the scene by linearized depth with a line every 128 units, fading out at fMaxDistance.
+// Fullscreen debug views, picked by the debug mode in BlendParams.z:
+// 1: the depth Depth Resolve hands to the overlay pass. Tints the scene by linearized depth with a line every 128 units, fading out at fMaxDistance.
+// 3: the stencil tags. The plugin draws this with a stencil test, so every pixel that is drawn is tagged.
 
 #include "../Includes/Depth.hlsli"
 
@@ -35,8 +36,12 @@ float4 DepthParams : register(c0); // x = near, y = far - near, z = near * far
 float4 BlendParams : register(c1); // x = max distance, y = blend range, z = debug mode
 
 static const float BandSpacing = 128.0f;
+static const float DebugModeStencilTags = 3.0f;
 
 float4 main(VS_OUTPUT IN) : COLOR0 {
+    if (BlendParams.z == DebugModeStencilTags)
+        return float4(0.0f, 1.0f, 1.0f, 0.5f);
+
     float depth = LinearizeDepth(tex2D(DepthBuffer, IN.uv).r, DepthParams);
     float maxDistance = BlendParams.x;
 

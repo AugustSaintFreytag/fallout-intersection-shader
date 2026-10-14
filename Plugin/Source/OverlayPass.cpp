@@ -1,7 +1,9 @@
 #include "OverlayPass.hpp"
 
 #include "Dependencies.hpp"
+#include "RenderStates.hpp"
 #include "Settings.hpp"
+#include "StencilTags.hpp"
 #include "TerrainPasses.hpp"
 
 #include "Bethesda/BSShaderAccumulator.hpp"
@@ -9,7 +11,6 @@
 #include "Gamebryo/NiD3DPixelShader.hpp"
 #include "Gamebryo/NiD3DVertexShader.hpp"
 #include "Gamebryo/NiDX9Renderer.hpp"
-#include "Gamebryo/NiDX9RenderState.hpp"
 
 #include <algorithm>
 #include <vector>
@@ -23,11 +24,6 @@ namespace OverlayPass {
 	static constexpr uint32_t	TERRAIN_SAMPLER_COUNT		= 14;	// BaseMap[7] and NormalMap[7]
 	static constexpr const char* OVERLAY_SHADER_MARKER		= "IBOverlayFlags";
 
-	// Offsets used by NiDX9RenderState::SetRenderState (GAME - 0xE88780) and SetTexture (GAME - 0xE88A20).
-	ASSERT_OFFSET(NiD3DRenderState, m_akRenderStateSettings, 0x120);
-	ASSERT_OFFSET(NiD3DRenderState, m_bSavedStates, 0x920);
-	ASSERT_OFFSET(NiD3DRenderState, m_apkTextureStageTextures, 0x10A0);
-
 	struct FullscreenVertex {
 		float x, y, z;
 		float u, v;
@@ -39,41 +35,6 @@ namespace OverlayPass {
 	static bool							bDebugReady				= false;
 	static bool							bOverlayShadersReady	= false;
 	static uint32_t						uiLoggedFrames			= 0;
-
-	// Forces render states at the NiDX9RenderState level for the lifetime of the object, then restores them.
-	// NiDX9RenderState::SetRenderState (GAME - 0xE88780) skips every change to a state whose m_bSavedStates
-	// entry is set, and its last argument sets that entry. Every render state the game sets goes through it,
-	// including Bethesda's BSRenderState layer and LOD Flicker Fix's hook, so the passes drawn meanwhile
-	// cannot override the forced values.
-	// Never force D3DRS_ZFUNC: LOD Flicker Fix remaps its value on every set, so restoring it would remap it twice.
-	class ForcedRenderStates {
-	public:
-		explicit ForcedRenderStates(NiDX9RenderState* apRenderState) : pRenderState(apRenderState) {}
-
-		~ForcedRenderStates() {
-			for (auto it = kSaved.rbegin(); it != kSaved.rend(); ++it) {
-				pRenderState->m_bSavedStates[it->eState] = false;
-				pRenderState->SetRenderState(it->eState, it->uiValue, 0, false);
-				pRenderState->m_bSavedStates[it->eState] = it->bSaved;
-			}
-		}
-
-		void Force(D3DRENDERSTATETYPE aeState, uint32_t auiValue) {
-			kSaved.push_back({ aeState, pRenderState->m_akRenderStateSettings[aeState].m_uiCurrValue, pRenderState->m_bSavedStates[aeState] });
-			pRenderState->m_bSavedStates[aeState] = false;
-			pRenderState->SetRenderState(aeState, auiValue, 0, true);
-		}
-
-	private:
-		struct SavedState {
-			D3DRENDERSTATETYPE	eState;
-			uint32_t			uiValue;
-			bool				bSaved;
-		};
-
-		NiDX9RenderState*		pRenderState;
-		std::vector<SavedState>	kSaved;
-	};
 
 	// The overlay needs our terrain shaders. With the original ones the replay would paint plain terrain over everything.
 	static bool CheckOverlayShaders() {
@@ -108,11 +69,12 @@ namespace OverlayPass {
 		bOverlayShadersReady = CheckOverlayShaders();
 		if (bOverlayShadersReady)
 			_MESSAGE("Terrain overlay shaders found");
+		StencilTags::SetEnabled(bOverlayShadersReady || Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS);
 
 		pDebugVS = Dependencies::CreateVertexShader("IntersectionBlend\\DebugDepth.vso");
 		pDebugPS = Dependencies::CreatePixelShader("IntersectionBlend\\DebugDepth.pso");
 		if (!pDebugVS || !pDebugPS) {
-			_MESSAGE("Failed to load debug shaders (VS %p, PS %p), depth debug view disabled", pDebugVS, pDebugPS);
+			_MESSAGE("Failed to load debug shaders (VS %p, PS %p), debug views disabled", pDebugVS, pDebugPS);
 			return;
 		}
 
@@ -125,7 +87,7 @@ namespace OverlayPass {
 			D3DDECL_END()
 		};
 		if (FAILED(NiDX9Renderer::GetSingleton()->GetD3DDevice()->CreateVertexDeclaration(kElements, &pFullscreenDecl))) {
-			_MESSAGE("Failed to create the fullscreen vertex declaration, depth debug view disabled");
+			_MESSAGE("Failed to create the fullscreen vertex declaration, debug views disabled");
 			return;
 		}
 
@@ -177,7 +139,16 @@ namespace OverlayPass {
 			ForcedRenderStates kStates(pRenderState);
 			kStates.Force(D3DRS_ZENABLE, D3DZB_FALSE);
 			kStates.Force(D3DRS_ZWRITEENABLE, FALSE);
-			kStates.Force(D3DRS_STENCILENABLE, FALSE);
+			// Only over pixels of statics tagged during the opaque stage. D3D9 runs the stencil test with the depth test off.
+			kStates.Force(D3DRS_STENCILENABLE, TRUE);
+			kStates.Force(D3DRS_TWOSIDEDSTENCILMODE, FALSE);
+			kStates.Force(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
+			kStates.Force(D3DRS_STENCILREF, StencilTags::TERRAIN_BLEND_BIT);
+			kStates.Force(D3DRS_STENCILMASK, StencilTags::TERRAIN_BLEND_BIT);
+			kStates.Force(D3DRS_STENCILWRITEMASK, 0);
+			kStates.Force(D3DRS_STENCILPASS, D3DSTENCILOP_KEEP);
+			kStates.Force(D3DRS_STENCILFAIL, D3DSTENCILOP_KEEP);
+			kStates.Force(D3DRS_STENCILZFAIL, D3DSTENCILOP_KEEP);
 			kStates.Force(D3DRS_ALPHATESTENABLE, FALSE);
 			kStates.Force(D3DRS_ADAPTIVETESS_Y, 0); // Alpha to coverage, NVIDIA only.
 			kStates.Force(D3DRS_ALPHABLENDENABLE, TRUE);
@@ -202,7 +173,8 @@ namespace OverlayPass {
 		return uiPasses;
 	}
 
-	static void DrawDebugDepth(IDirect3DDevice9* apDevice, const NiCamera* apCamera, IDirect3DBaseTexture9* apDepthTexture) {
+	// Draws the fullscreen debug view for the current debug mode: depth bands, or the stencil tags.
+	static void DrawDebugView(IDirect3DDevice9* apDevice, const NiCamera* apCamera, IDirect3DBaseTexture9* apDepthTexture) {
 		// Capture everything we touch so the game's render state cache stays coherent.
 		IDirect3DStateBlock9* pStateBlock = nullptr;
 		if (FAILED(apDevice->CreateStateBlock(D3DSBT_ALL, &pStateBlock)))
@@ -222,7 +194,17 @@ namespace OverlayPass {
 
 		apDevice->SetRenderState(D3DRS_ZENABLE, D3DZB_FALSE);
 		apDevice->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
-		apDevice->SetRenderState(D3DRS_STENCILENABLE, FALSE);
+		if (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS) {
+			apDevice->SetRenderState(D3DRS_STENCILENABLE, TRUE);
+			apDevice->SetRenderState(D3DRS_TWOSIDEDSTENCILMODE, FALSE);
+			apDevice->SetRenderState(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
+			apDevice->SetRenderState(D3DRS_STENCILREF, StencilTags::TERRAIN_BLEND_BIT);
+			apDevice->SetRenderState(D3DRS_STENCILMASK, StencilTags::TERRAIN_BLEND_BIT);
+			apDevice->SetRenderState(D3DRS_STENCILWRITEMASK, 0);
+		}
+		else {
+			apDevice->SetRenderState(D3DRS_STENCILENABLE, FALSE);
+		}
 		apDevice->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
 		apDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
 		apDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
@@ -265,17 +247,23 @@ namespace OverlayPass {
 
 		IDirect3DDevice9* pDevice = NiDX9Renderer::GetSingleton()->GetD3DDevice();
 
+		// Without this frame's tags the stencil buffer holds nothing the overlay could test against.
+		const bool bTagged = StencilTags::HasTags(apTarget);
+
 		uint32_t uiPasses = 0;
-		if (bOverlayShadersReady)
+		if (bOverlayShadersReady && bTagged)
 			uiPasses = RenderTerrainOverlay(pDevice, apAccumulator->m_pkCamera, apTarget, apDepthTexture);
 		TerrainPasses::Clear();
 
-		if (bDebugReady && Settings::eDebugMode == Settings::DEBUG_DEPTH_BANDS)
-			DrawDebugDepth(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
+		const bool bDebugView = Settings::eDebugMode == Settings::DEBUG_DEPTH_BANDS || (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS && bTagged);
+		if (bDebugReady && bDebugView)
+			DrawDebugView(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
+
+		StencilTags::Clear(pDevice);
 
 		if (uiLoggedFrames < 3) {
 			const NiFrustum& kFrustum = apAccumulator->m_pkCamera->m_kViewFrustum;
-			_MESSAGE("Post-resolve callback: target %p, depth %p, near %.2f, far %.2f, %u landscape passes replayed", apTarget, apDepthTexture, kFrustum.m_fNear, kFrustum.m_fFar, uiPasses);
+			_MESSAGE("Post-resolve callback: target %p, depth %p, near %.2f, far %.2f, stencil tags %u, %u landscape passes replayed", apTarget, apDepthTexture, kFrustum.m_fNear, kFrustum.m_fFar, bTagged, uiPasses);
 			uiLoggedFrames++;
 		}
 	}
