@@ -14,26 +14,37 @@
 #include <unordered_set>
 #include <utility>
 
+// Tags the pixels of statics that may blend with terrain in the stencil buffer while the opaque world is drawn.
+//
+// The opaque stage runs with stencil writes forced on. Every batch-rendered pass replaces the tag bit. Eligible
+// statics set it. Everything else clears it where it draws in front, such as terrain, actors and other statics.
+// The overlay pass only draws where the bit is set and clears the stencil buffer afterwards.
+//
+// A reference is eligible if its base form type is in the INI type list and its form ID is not blacklisted.
+//
+// Reference at `BSShaderAccumulator::FinishAccumulating_Standard_PreResolveDepth` (GAME - 0xB65AE0).
 namespace StencilTags {
+
 	ASSERT_OFFSET(BSShaderAccumulator, eRenderMode, 0x19C);
 
-	// Calls of FinishAccumulating_Standard_PreResolveDepth (GAME - 0xB65AE0), cdecl (BSShaderAccumulator*): from
-	// FinishAccumulatingPreResolveDepth for the normal render mode (GAME - 0xB66520), and from the function that
-	// runs both stages back to back (GAME - 0xB665A0). Depth Resolve replaces the calls of the second stage next to them.
+	// Calls of `FinishAccumulating_Standard_PreResolveDepth` (GAME - 0xB65AE0), cdecl `(BSShaderAccumulator*)`.
+	// One is in `FinishAccumulatingPreResolveDepth` for the normal render mode (GAME - 0xB66520). The other is in the
+	// function that runs both stages back to back (GAME - 0xB665A0). Depth Resolve replaces the calls of the second stage next to them.
 	static constexpr uint32_t PRE_RESOLVE_CALL_STANDARD	= 0xB6653D;
 	static constexpr uint32_t PRE_RESOLVE_CALL_COMBINED	= 0xB665A6;
 
-	// Engine layout, from JIP LN NVSE and xNVSE.
+	// Engine Layout
+	// Reference at JIP LN NVSE and xNVSE.
 	static constexpr uint32_t VTBL_BS_FADE_NODE			= 0x10A8F90;
-	static constexpr uint32_t FADE_NODE_REFERENCE		= 0xCC;		// TESObjectREFR*, null for nodes without a reference
-	static constexpr uint32_t REFR_BASE_FORM			= 0x20;		// TESForm*
-	static constexpr uint32_t FORM_TYPE_ID				= 0x04;		// uint8_t
-	static constexpr uint32_t FORM_REF_ID				= 0x0C;		// uint32_t
-	static constexpr uint32_t DATA_HANDLER				= 0x11C3F2C;	// DataHandler*
-	static constexpr uint32_t DATA_HANDLER_MOD_COUNT	= 0x218;	// ModList::loadedModCount
-	static constexpr uint32_t DATA_HANDLER_MODS			= 0x21C;	// ModList::loadedMods, ModInfo*[255]
-	static constexpr uint32_t MOD_INFO_NAME				= 0x20;		// char[0x104]
-	static constexpr uint32_t MOD_INFO_INDEX			= 0x40C;	// uint8_t
+	static constexpr uint32_t FADE_NODE_REFERENCE		= 0xCC;		// `TESObjectREFR*`, null for nodes without a reference
+	static constexpr uint32_t REFR_BASE_FORM			= 0x20;		// `TESForm*`
+	static constexpr uint32_t FORM_TYPE_ID				= 0x04;		// `uint8_t`
+	static constexpr uint32_t FORM_REF_ID				= 0x0C;		// `uint32_t`
+	static constexpr uint32_t DATA_HANDLER				= 0x11C3F2C;	// `DataHandler*`
+	static constexpr uint32_t DATA_HANDLER_MOD_COUNT	= 0x218;	// `ModList::loadedModCount`
+	static constexpr uint32_t DATA_HANDLER_MODS			= 0x21C;	// `ModList::loadedMods`, `ModInfo*[255]`
+	static constexpr uint32_t MOD_INFO_NAME				= 0x20;		// `char[0x104]`
+	static constexpr uint32_t MOD_INFO_INDEX			= 0x40C;	// `uint8_t`
 
 	static constexpr uint32_t MAX_PARENT_DEPTH			= 64;
 
@@ -48,7 +59,7 @@ namespace StencilTags {
 	static const BSRenderedTexture*				pTaggedTarget		= nullptr;
 	static uint32_t								uiTaggedStages		= 0;
 
-	// The last pass's geometry and verdict. Lit geometry draws one pass per light group, back to back.
+	// Geometry and verdict of the last pass. Lit geometry draws one pass per light group, back to back.
 	static const NiGeometry*					pLastGeometry		= nullptr;
 	static bool									bLastEligible		= false;
 
@@ -57,8 +68,8 @@ namespace StencilTags {
 		return *reinterpret_cast<const T*>(reinterpret_cast<const uint8_t*>(apObject) + auiOffset);
 	}
 
-	// Returns the reference that owns a scene graph object: the first BSFadeNode up its parents that has one.
-	// Terrain, grass and other objects without a reference return null.
+	// Returns the reference that owns the given scene graph object, from the first `BSFadeNode` up its parents that has one.
+	// Returns null for terrain, grass and other objects without a reference.
 	static const void* GetParentReference(const NiAVObject* apObject) {
 		const NiAVObject* pNode = apObject;
 		for (uint32_t uiDepth = 0; pNode && uiDepth < MAX_PARENT_DEPTH; uiDepth++) {
@@ -99,6 +110,8 @@ namespace StencilTags {
 		return -1;
 	}
 
+	// Resolves the INI selection against the load order.
+	// Call once the game data is loaded, at NVSE DeferredInit.
 	void LoadSelection() {
 		std::fill(std::begin(bTypeEligible), std::end(bTypeEligible), false);
 		for (uint8_t ucType : Settings::kTerrainBlendTypes)
@@ -137,7 +150,8 @@ namespace StencilTags {
 		pTaggingStates.reset();
 	}
 
-	// The opaque stage of the main scene: the same accumulators Depth Resolve runs its pre-water resolve for.
+	// Returns whether the given accumulator runs the opaque stage of the main scene.
+	// These are the accumulators Depth Resolve runs its pre-water resolve for.
 	static bool ShouldTag(const BSShaderAccumulator* apAccumulator) {
 		return bEnabled && Settings::bEnabled
 			&& apAccumulator->eRenderMode == BSShaderManager::BSSM_RENDER_NORMAL
@@ -145,6 +159,7 @@ namespace StencilTags {
 			&& BSShaderManager::GetCurrentRenderTarget();
 	}
 
+	// Runs the opaque stage, with tagging around it if the accumulator qualifies.
 	static void RunPreResolveDepth(PreResolveDepthFn apOriginal, BSShaderAccumulator* apAccumulator) {
 		const bool bTag = !pTaggingStates && ShouldTag(apAccumulator);
 		if (bTag)
@@ -164,16 +179,20 @@ namespace StencilTags {
 		RunPreResolveDepth(reinterpret_cast<PreResolveDepthFn>(kCombinedDetour.GetOverwrittenAddr()), apAccumulator);
 	}
 
+	// Hooks both calls of the opaque stage.
 	void InstallHooks() {
 		kStandardDetour.ReplaceCall(PRE_RESOLVE_CALL_STANDARD, PreResolveDepthStandardHook);
 		kCombinedDetour.ReplaceCall(PRE_RESOLVE_CALL_COMBINED, PreResolveDepthCombinedHook);
 		_MESSAGE("Stencil tagging installed (calls at %08X, %08X -> %08X, %08X)", PRE_RESOLVE_CALL_STANDARD, PRE_RESOLVE_CALL_COMBINED, kStandardDetour.GetOverwrittenAddr(), kCombinedDetour.GetOverwrittenAddr());
 	}
 
+	// Enables or disables tagging, for example when the overlay shaders are missing.
 	void SetEnabled(bool abEnabled) {
 		bEnabled = abEnabled;
 	}
 
+	// Sets the tag reference if the geometry of the given render pass is eligible.
+	// Call before every batch-rendered pass draw. Returns true if `EndPass` has to be called after the draw.
 	bool BeginPass(const void* apRenderPass) {
 		if (!pTaggingStates || !apRenderPass)
 			return false;
@@ -191,25 +210,31 @@ namespace StencilTags {
 		return true;
 	}
 
+	// Resets the tag reference after a tagged pass.
 	void EndPass() {
 		// Draws outside the batch renderer (sky, LOD) must not inherit the tag.
 		if (pTaggingStates)
 			pTaggingStates->Update(D3DRS_STENCILREF, 0);
 	}
 
+	// Returns the number of opaque stages tagged since the last call and resets it. For diagnostics.
 	uint32_t ConsumeTaggedStageCount() {
 		return std::exchange(uiTaggedStages, 0);
 	}
 
+	// Returns whether the stencil buffer of the given target holds tags from this frame's opaque stage.
 	bool HasTags(const BSRenderedTexture* apTarget) {
 		return pTaggedTarget && pTaggedTarget == apTarget;
 	}
 
+	// Clears the stencil buffer of the bound target and forgets the tags.
 	void Clear(IDirect3DDevice9* apDevice) {
-		// Nothing writes stencil between the start of the frame and the overlay pass apart from us (RenderDoc
-		// captures 02 and 03), so clearing the whole buffer restores what the water passes expect.
+		// Only tagging writes stencil between the start of the frame and the overlay pass.
+		// Clearing the whole buffer restores what the water passes expect.
+		// Verified in RenderDoc captures 02 and 03.
 		if (pTaggedTarget)
 			apDevice->Clear(0, nullptr, D3DCLEAR_STENCIL, 0, 1.0f, 0);
 		pTaggedTarget = nullptr;
 	}
+
 }

@@ -1,5 +1,6 @@
 //  Template for terrain shaders for blending up to 7 textures and using up to 8 pointlights.
-//  From Parallax Shaders, extended with the Intersection Blend overlay mode (see includes/TerrainOverlay.hlsli).
+//  From Parallax Shaders, extended with the Intersection Blend overlay mode.
+//  Reference at "Shaders/Includes/TerrainOverlay.hlsli".
 
 #if defined(__INTELLISENSE__)
     #define PS
@@ -95,6 +96,8 @@ struct PS_INPUT {
 
 struct PS_OUTPUT {
     float4 color_0 : COLOR0;
+    float4 color_1 : COLOR1;    // Field pass only (`GetFieldOutput`)
+    float4 color_2 : COLOR2;
 };
 
 #ifdef PS
@@ -121,43 +124,70 @@ float PointLightCount : register(c88);
 
 PS_OUTPUT main(PS_INPUT IN) {
     PS_OUTPUT OUT;
+    OUT.color_1 = 0.0f;
+    OUT.color_2 = 0.0f;
 
-    // In the overlay pass, shade the terrain under the visible surface instead of this fragment (see TerrainOverlay.hlsli).
+    [branch] if (IsFieldPass()) {
+        GetFieldOutput(IN.blend_0, IN.blend_1, IN.vertex_color, OUT.color_0, OUT.color_1, OUT.color_2);
+        return OUT;
+    }
+
+    // In the overlay pass, shade the terrain under the visible surface instead of this fragment (`GetOverlaySample`).
     float2 uv = IN.uv.xy;
     float3 lPosition = IN.lPosition.xyz;
+    float4 blend0 = IN.blend_0;
+    float4 blend1 = IN.blend_1;
     OverlayRay overlayRay = GetOverlayRay(IN.lPosition.xyz, IN.viewPosition.xyz, IN.projectionPosition.w, IN.uv.xy);
     float2 dx = overlayRay.uvDx;
     float2 dy = overlayRay.uvDy;
     float overlayAlpha = 1.0f;
     float overlayDistanceScale = 1.0f;
+    float3 basisTangent = IN.tangent.xyz;
+    float3 basisBinormal = IN.binormal.xyz;
+    float3 basisNormal = IN.normal.xyz;
     [branch] if (IsOverlayPass()) {
-        OverlaySample overlay = GetOverlaySample(IN.vpos, overlayRay, IN.normal.xyz);
-        clip(overlay.alpha - 1.0f / 255.0f);
-        overlayAlpha = overlay.alpha;
-        uv += overlay.uvOffset;
-        lPosition += overlay.positionOffset;
-        dx *= overlay.distanceScale;
-        dy *= overlay.distanceScale;
-        overlayDistanceScale = overlay.distanceScale;
+        [branch] if (IsGroundMode()) {
+            GroundSample ground = GetGroundSample(IN.vpos);
+            overlayAlpha = ground.alpha;
+            uv = ground.uv;
+            dx = ground.uvDx;
+            dy = ground.uvDy;
+            lPosition = ground.position;
+            blend0 = ground.blend0;
+            blend1 = ground.blend1;
+            GetGroundBasis(ground.groundNormal, basisTangent, basisBinormal, basisNormal);
+        }
+        else {
+            OverlaySample overlay = GetOverlaySample(IN.vpos, overlayRay);
+            clip(overlay.alpha - 1.0f / 255.0f);
+            overlayAlpha = overlay.alpha;
+            uv += overlay.uvOffset;
+            lPosition += overlay.positionOffset;
+            dx *= overlay.distanceScale;
+            dy *= overlay.distanceScale;
+            overlayDistanceScale = overlay.distanceScale;
+            RebaseOnGround(basisTangent, basisBinormal, basisNormal, overlay.groundNormal);
+        }
     }
 
     int texCount = TEX_COUNT; // Macro.
-    float3 tangent = normalize(IN.tangent.xyz);
-    float3 binormal = normalize(IN.binormal.xyz);
-    float3 normal = normalize(IN.normal.xyz);
+    float3 tangent = normalize(basisTangent);
+    float3 binormal = normalize(basisBinormal);
+    float3 normal = normalize(basisNormal);
     float3x3 tbn = float3x3(tangent, binormal, normal);
-    float3 eyeDir = normalize(mul(tbn, IN.viewPosition.xyz - lPosition));
-    float dist = length(IN.viewPosition.xyz - lPosition);
+    float3 eyePosition = GetEyePosition(IN.viewPosition.xyz);
+    float3 eyeDir = normalize(mul(tbn, eyePosition - lPosition));
+    float dist = length(eyePosition - lPosition);
 
     float weights[7] = { 0, 0, 0, 0, 0, 0, 0 };
-    float blends[7] = { IN.blend_0.x, IN.blend_0.y, IN.blend_0.z, IN.blend_0.w, IN.blend_1.x, IN.blend_1.y, IN.blend_1.z };
+    float blends[7] = { blend0.x, blend0.y, blend0.z, blend0.w, blend1.x, blend1.y, blend1.z };
     float spec[7] = { LandSpec[0].x, LandSpec[0].y, LandSpec[0].z, LandSpec[0].w, LandSpec[1].x, LandSpec[1].y, LandSpec[1].z };
     float heightStatus[7] = { LandHeight[0].x, LandHeight[0].y, LandHeight[0].z, LandHeight[0].w, LandHeight[1].x, LandHeight[1].y, LandHeight[1].z };
     float2 offsetUV = getParallaxCoords(dist, uv, dx, dy, eyeDir, texCount, BaseMap, blends, heightStatus, weights);
 
     float gloss = 0.0f;
     float specExponent = 0.0f;
-    float3 baseColor = blendDiffuseMaps(IN.vertex_color, offsetUV, dx, dy, texCount, BaseMap, weights);
+    float3 baseColor = blendDiffuseMaps(GetVertexColor(IN.vertex_color, IN.vpos), offsetUV, dx, dy, texCount, BaseMap, weights);
     float3 combinedNormal = blendNormalMaps(offsetUV, dx, dy, texCount, NormalMap, weights, spec, gloss, specExponent);
 
     float3 lightTS = mul(tbn, SunDir.xyz);
@@ -181,11 +211,7 @@ PS_OUTPUT main(PS_INPUT IN) {
     
     // Per pixel fog.
     float4 fog;
-    float3 fogPos = IN.projectionPosition.xyz;
-    #ifdef REVERSED_DEPTH
-        fogPos.z = IN.projectionPosition.w - IN.projectionPosition.z;
-    #endif
-    fogPos *= overlayDistanceScale;
+    float3 fogPos = GetFogPosition(IN.projectionPosition, lPosition, overlayDistanceScale);
     float fogStrength = 1 - saturate((FogParam.x - length(fogPos)) / FogParam.y);
     fog.rgb = FogColor.rgb;
     fog.a = pow(fogStrength, FogParam.z);
@@ -194,7 +220,7 @@ PS_OUTPUT main(PS_INPUT IN) {
     finalColor = lerp(finalColor, fog.rgb, fog.a); // Apply fog.
 
     if (IsOverlayPass() && IsOverlayMaskDebug())
-        finalColor = OverlayMaskColor;
+        finalColor = GetOverlayMaskColor();
 
     OUT.color_0.a = overlayAlpha;
     OUT.color_0.rgb = finalColor;

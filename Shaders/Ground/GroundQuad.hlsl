@@ -1,10 +1,11 @@
 // Vertex shader for ground mode (lipping mode 3) of the terrain overlay.
 //
-// During the overlay replay, the plugin draws one triangle over the whole screen with this shader in place of each
-// landscape block's mesh (see Plugin/Source/DrawRedirect.hpp). The block's own pass has bound its pixel shader, textures
-// and constants, so that shader runs on every pixel of the screen. In ground mode it takes everything from the ground
-// buffers and keeps only the pixels whose ground point lies in this block. The interpolants it would read from the mesh
-// are zero here.
+// In the overlay replay, the plugin draws one full-screen triangle with this shader in place of each landscape block's
+// mesh. The block's own pass has bound its pixel shader, textures and constants. That shader runs on every pixel of
+// the screen. In ground mode it takes everything from the ground buffers. It keeps only the pixels whose ground point
+// lies in this block. The interpolants it would read from the mesh are zero here.
+//
+// Reference at "Plugin/Source/DrawRedirect.cpp".
 
 struct VS_INPUT {
     float3 position : POSITION;

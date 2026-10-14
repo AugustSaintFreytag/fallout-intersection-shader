@@ -1,14 +1,14 @@
 // Ground buffer: for every screen pixel, what the terrain overlay needs to know about the ground under the visible surface.
 //
-// Reads the scene depth (Depth Resolve's copy) and the terrain height field (the landscape drawn from straight above).
-// Writes, as R32G32B32A32F:
-//   r = linear view depth of the visible surface
-//   g = height of that surface above the terrain under it, along the terrain normal (NO_GROUND where there is no terrain)
-//   b, a = x and y of the terrain normal there (z is positive)
+// Reads the scene depth copy of Depth Resolve and the height field. Ground mode also reads the attribute fields.
+// Writes two R32G32B32A32F targets, bound to s14 and s15 in the terrain shaders. Their layout depends on the mode
+// (`PS_OUTPUT`).
 //
-// The overlay reads this buffer from s14 instead of the scene depth, so the terrain shaders keep their sampler layout.
+// The overlay reads these buffers instead of the scene depth. The terrain shaders keep their sampler layout.
 
 #include "../Includes/Depth.hlsli"
+#include "../Includes/IntersectionBlend.hlsli"
+#include "../Includes/Packing.hlsli"
 
 struct VS_INPUT {
     float3 position : POSITION;
@@ -38,6 +38,10 @@ VS_OUTPUT main(VS_INPUT IN) {
 
 sampler2D SceneDepth : register(s0);
 sampler2D HeightField : register(s1);
+// Attribute fields, texel for texel with the height field
+sampler2D FieldBlend0 : register(s2);   // Blend weights 0-3
+sampler2D FieldBlend1 : register(s3);   // Blend weights 4-6, a = block code
+sampler2D FieldColor : register(s4);    // Vertex colour
 
 float4 DepthParams : register(c0);              // x = near, y = far - near, z = near * far
 float4 ProjectionParams : register(c1);         // x = _11, y = _22, z = _31, w = _32 of the scene projection
@@ -46,14 +50,16 @@ row_major float4x4 WorldToField : register(c5); // Eye-relative world position t
 row_major float4x4 FieldToWorld : register(c9); // Height field clip space to eye-relative world position
 float4 FieldParams : register(c13);             // x, y = height field texel size, z = maximum distance
 float4 ScreenParams : register(c14);            // x, y = screen texel size
+float4 GroundParams : register(c15);            // x = 1 in ground mode, y = blend range, z = 1 for unrolled mapping
+float4 EyePosition : register(c16);             // xyz = camera position in world space
 
 static const float NO_GROUND = 1.0e9f;
 
-// D3D9 rasterizes at whole-number window coordinates: the texel or pixel at column i holds what lies at clip
-// x = 2 i / width - 1, half a texel left of its centre, and likewise for rows.
+// D3D9 rasterizes at whole-number window coordinates. The texel or pixel at column i holds what lies at
+// clip x = 2 i / width - 1, half a texel left of its centre. The same applies to rows.
 
-// Eye-relative world position of the terrain stored in a height field texel.
-// The height field is cleared to 0 (the far plane with reversed depth), so 0 means no terrain was drawn there.
+// Returns the eye-relative world position of the terrain in a height field texel.
+// Clears the valid flag if no terrain was drawn there. The height field is cleared to 0, the far plane with reversed depth.
 float3 GetFieldPoint(float2 texel, inout bool valid) {
     float depth = tex2Dlod(HeightField, float4((texel + 0.5f) * FieldParams.xy, 0.0f, 0.0f)).r;
     valid = valid && depth > 0.0f;
@@ -63,26 +69,117 @@ float3 GetFieldPoint(float2 texel, inout bool valid) {
     return world.xyz / world.w;
 }
 
-float4 main(VS_OUTPUT IN) : COLOR0 {
-    float sceneDepth = LinearizeDepth(tex2Dlod(SceneDepth, float4(IN.uv, 0.0f, 0.0f)).r, DepthParams);
+// Returns the height field texel coordinates of an eye-relative world position. Texel i lies at i.
+float2 GetFieldTexel(float3 position) {
+    float4 fieldClip = mul(float4(position, 1.0f), WorldToField);
+    return (float2(fieldClip.x, -fieldClip.y) / fieldClip.w * 0.5f + 0.5f) / FieldParams.xy;
+}
 
-    // Eye-relative world position of the visible surface.
-    float2 window = IN.uv - 0.5f * ScreenParams.xy;
+// Returns the eye-relative world position of the visible surface at a screen texture coordinate, with its linear depth.
+float3 GetSurface(float2 uv, out float sceneDepth) {
+    sceneDepth = LinearizeDepth(tex2Dlod(SceneDepth, float4(uv, 0.0f, 0.0f)).r, DepthParams);
+    float2 window = uv - 0.5f * ScreenParams.xy;
     float2 ndc = float2(window.x * 2.0f - 1.0f, 1.0f - window.y * 2.0f);
     float3 viewPosition = float3((ndc.x - ProjectionParams.z) / ProjectionParams.x, (ndc.y - ProjectionParams.w) / ProjectionParams.y, 1.0f) * sceneDepth;
-    float3 surface = viewPosition.x * ViewToWorld[0].xyz + viewPosition.y * ViewToWorld[1].xyz + viewPosition.z * ViewToWorld[2].xyz;
+    return viewPosition.x * ViewToWorld[0].xyz + viewPosition.y * ViewToWorld[1].xyz + viewPosition.z * ViewToWorld[2].xyz;
+}
 
-    float4 result = float4(sceneDepth, NO_GROUND, 0.0f, 0.0f);
+float3 GetSurface(float2 uv) {
+    float sceneDepth;
+    return GetSurface(uv, sceneDepth);
+}
+
+struct FieldAttributes {
+    float4 blend0;
+    float3 blend1;
+    float3 vertexColor;
+};
+
+// Returns blend weights and vertex colour at an eye-relative ground point.
+// Interpolates bilinearly between the texels of the point's own landscape block. Texels of a neighbouring block weigh
+// other textures and are left out.
+FieldAttributes GetFieldAttributes(float3 groundPoint) {
+    float2 texel = GetFieldTexel(groundPoint);
+    float2 base = floor(texel);
+    float2 blend = texel - base;
+    float code = GetBlockCode(floor((EyePosition.xy + groundPoint.xy) / LandscapeBlockSize));
+
+    FieldAttributes result;
+    result.blend0 = 0.0f;
+    result.blend1 = 0.0f;
+    result.vertexColor = 0.0f;
+    float totalWeight = 0.0f;
+
+    // Nearest texel to the point. Used if no texel of the bilinear footprint lies in its block.
+    float2 nearest = floor(texel + 0.5f);
+    FieldAttributes fallback = result;
+
+    [unroll] for (int i = 0; i < 4; i++) {
+        float2 offset = float2(i % 2, i / 2);
+        float4 uv = float4((base + offset + 0.5f) * FieldParams.xy, 0.0f, 0.0f);
+        float4 blend0 = tex2Dlod(FieldBlend0, uv);
+        float4 blend1 = tex2Dlod(FieldBlend1, uv);
+        float3 vertexColor = tex2Dlod(FieldColor, uv).rgb;
+
+        float2 axisWeights = lerp(1.0f - blend, blend, offset);
+        float weight = axisWeights.x * axisWeights.y * (IsSameBlockCode(blend1.a, code) ? 1.0f : 0.0f);
+        result.blend0 += blend0 * weight;
+        result.blend1 += blend1.rgb * weight;
+        result.vertexColor += vertexColor * weight;
+        totalWeight += weight;
+
+        if (all(base + offset == nearest)) {
+            fallback.blend0 = blend0;
+            fallback.blend1 = blend1.rgb;
+            fallback.vertexColor = vertexColor;
+        }
+    }
+
+    if (totalWeight < 1e-3f)
+        return fallback;
+
+    result.blend0 /= totalWeight;
+    result.blend1 /= totalWeight;
+    result.vertexColor /= totalWeight;
+    return result;
+}
+
+// Ground buffer targets in one of two layouts.
+// Pixels without terrain under them or beyond the maximum distance get `NO_GROUND` in COLOR0.g in the first layout.
+// They get zero in both targets in the second.
+//
+// Lipping modes 0-2, the overlay replays the terrain behind each static:
+//   COLOR0 = linear view depth of the visible surface, height of the surface above the terrain under it along the
+//            terrain normal, terrain normal x and y (z is positive)
+//   COLOR1 = xyz: eye-relative foot of the surface on the terrain, w = 1 (unused by the overlay)
+//
+// Ground mode, the overlay shades every pixel from these targets alone (`GetGroundSample`):
+//   COLOR0 = xyz: eye-relative ground point that shades the surface (its foot, unrolled if enabled),
+//            w: terrain normal x and y, as 2 x 12 bits of x * 0.5 + 0.5
+//   COLOR1 = 3 x 8 bits per channel: x = blend weights 0-2, y = blend weights 3-5, z = blend weight 6 and vertex
+//            colour r, g, w = vertex colour b, overlay opacity, 0
+struct PS_OUTPUT {
+    float4 target0 : COLOR0;
+    float4 target1 : COLOR1;
+};
+
+PS_OUTPUT main(VS_OUTPUT IN) {
+    bool groundMode = GroundParams.x > 0.5f;
+
+    float sceneDepth;
+    float3 surface = GetSurface(IN.uv, sceneDepth);
+
+    PS_OUTPUT result;
+    result.target0 = groundMode ? 0.0f : float4(sceneDepth, NO_GROUND, 0.0f, 0.0f);
+    result.target1 = 0.0f;
     if (sceneDepth > FieldParams.z)
         return result;
 
-    // The height field texel the surface lies over, and its neighbours for bilinear interpolation.
-    float4 fieldClip = mul(float4(surface, 1.0f), WorldToField);
-    float2 fieldUV = float2(fieldClip.x, -fieldClip.y) / fieldClip.w * 0.5f + 0.5f;
-    if (any(fieldUV < 0.0f) || any(fieldUV > 1.0f))
+    // Height field texel under the surface and its neighbours for bilinear interpolation.
+    float2 texel = GetFieldTexel(surface);
+    if (any(texel < 0.0f) || any(texel * FieldParams.xy > 1.0f))
         return result;
 
-    float2 texel = fieldUV / FieldParams.xy;
     float2 base = floor(texel);
     float2 blend = texel - base;
 
@@ -98,8 +195,37 @@ float4 main(VS_OUTPUT IN) : COLOR0 {
     float3 groundNormal = normalize(cross((p10 - p00) + (p11 - p01), (p01 - p00) + (p11 - p10)));
     groundNormal *= groundNormal.z < 0.0f ? -1.0f : 1.0f;
 
-    result.g = (surface.z - groundZ) * groundNormal.z;
-    result.ba = groundNormal.xy;
+    float height = (surface.z - groundZ) * groundNormal.z;
+    float3 foot = surface - groundNormal * height;
+
+    if (!groundMode) {
+        result.target0 = float4(sceneDepth, height, groundNormal.xy);
+        result.target1 = float4(foot, 1.0f);
+        return result;
+    }
+
+    // Surface normal from the neighbouring pixels on the same surface.
+    float2 screenTexel = ScreenParams.xy;
+    float3 surfaceDx = GetShorterDifference(surface, GetSurface(IN.uv + float2(screenTexel.x, 0.0f)), GetSurface(IN.uv - float2(screenTexel.x, 0.0f)));
+    float3 surfaceDy = GetShorterDifference(surface, GetSurface(IN.uv + float2(0.0f, screenTexel.y)), GetSurface(IN.uv - float2(0.0f, screenTexel.y)));
+    float3 surfaceNormal = normalize(cross(surfaceDx, surfaceDy));
+
+    // No ray gap applies. The overlay only draws on tagged samples. The ground point is never terrain behind the surface.
+    float3 params = float3(GroundParams.y, FieldParams.z, NO_GROUND);
+    float alpha = IntersectionBlendFactor(height, 0.0f, sceneDepth, false, groundNormal, surfaceNormal, params);
+
+    float3 groundPoint = foot;
+    if (GroundParams.z > 0.5f)
+        groundPoint += GetUnrollOffset(surface, surfaceNormal, groundNormal, height);
+
+    FieldAttributes attributes = GetFieldAttributes(groundPoint);
+
+    result.target0 = float4(groundPoint, PackUnorm2x12(groundNormal.xy * 0.5f + 0.5f));
+    result.target1 = float4(
+        PackUnorm3x8(attributes.blend0.xyz),
+        PackUnorm3x8(float3(attributes.blend0.w, attributes.blend1.xy)),
+        PackUnorm3x8(float3(attributes.blend1.z, attributes.vertexColor.rg)),
+        PackUnorm3x8(float3(attributes.vertexColor.b, alpha, 0.0f)));
     return result;
 }
 

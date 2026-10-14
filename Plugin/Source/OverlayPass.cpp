@@ -1,6 +1,8 @@
 #include "OverlayPass.hpp"
 
 #include "Dependencies.hpp"
+#include "DrawRedirect.hpp"
+#include "GroundBuffer.hpp"
 #include "RenderStates.hpp"
 #include "Settings.hpp"
 #include "StencilTags.hpp"
@@ -11,18 +13,32 @@
 #include "Gamebryo/NiD3DPixelShader.hpp"
 #include "Gamebryo/NiD3DVertexShader.hpp"
 #include "Gamebryo/NiDX9Renderer.hpp"
+#include "Gamebryo/NiGeometry.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <utility>
 #include <vector>
 
+// Draws the terrain overlay between Depth Resolve's depth copy and the post-depth effects such as AO.
+//
+// The landscape passes recorded in the opaque stage are drawn again, without depth test and with alpha blending.
+// The terrain pixel shaders switch into overlay mode for this replay. They read the ground buffer and output an
+// opacity that falls off with the height of the visible surface above the terrain.
+//
+// Reference at "Shaders/Includes/TerrainOverlay.hlsli".
 namespace OverlayPass {
-	// Must match shaders/includes/TerrainOverlay.hlsli.
+
+	// Must match "Shaders/Includes/TerrainOverlay.hlsli".
 	static constexpr float		OVERLAY_MAGIC				= 7919.0f;
-	static constexpr uint32_t	OVERLAY_CONSTANT_REGISTER	= 89;	// c89-c91
-	static constexpr uint32_t	OVERLAY_CONSTANT_COUNT		= 3;
-	static constexpr uint32_t	SCENE_DEPTH_SAMPLER			= 14;
-	static constexpr uint32_t	TERRAIN_SAMPLER_COUNT		= 14;	// BaseMap[7] and NormalMap[7]
+	static constexpr uint32_t	OVERLAY_CONSTANT_REGISTER	= 89;	// c89-c96
+	static constexpr uint32_t	OVERLAY_CONSTANT_COUNT		= 8;
+	static constexpr uint32_t	BLOCK_CONSTANT_REGISTER		= 92;	// c92-c93, per pass in ground mode
+	static constexpr uint32_t	GROUND_BUFFER_SAMPLER		= 14;	// Ground buffer, then the ground points at s15.
+	static constexpr uint32_t	GROUND_SAMPLER_COUNT		= 2;
+	static constexpr float		LANDSCAPE_BLOCK_SIZE		= 2048.0f;
+	static constexpr float		GROUND_MODE					= 3.0f;
+	static constexpr uint32_t	TERRAIN_SAMPLER_COUNT		= 14;	// `BaseMap[7]` and `NormalMap[7]`
 	static constexpr const char* OVERLAY_SHADER_MARKER		= "IBOverlayFlags";
 
 	struct FullscreenVertex {
@@ -38,7 +54,8 @@ namespace OverlayPass {
 	static uint32_t						uiLoggedFrames			= 0;
 	static uint32_t						uiFrameCallbacks		= 0;
 
-	// The overlay needs our terrain shaders. With the original ones the replay would paint plain terrain over everything.
+	// Checks that every terrain pixel shader in `Data\Shaders\Loose\` is an Intersection Blend build.
+	// With the original shaders, the replay would paint plain terrain over everything.
 	static bool CheckOverlayShaders() {
 		for (uint32_t uiNumber = 2092; uiNumber <= 2146; uiNumber += 2) {
 			char cPath[MAX_PATH];
@@ -67,11 +84,15 @@ namespace OverlayPass {
 		return true;
 	}
 
+	// Checks the terrain shaders and initializes stencil tagging, the ground buffer, the draw redirect and the debug views.
+	// Call once the D3D device exists, at NVSE DeferredInit.
 	void Initialize() {
 		bOverlayShadersReady = CheckOverlayShaders();
 		if (bOverlayShadersReady)
 			_MESSAGE("Terrain overlay shaders found");
 		StencilTags::SetEnabled(Settings::bStencilTags && (bOverlayShadersReady || Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS));
+		GroundBuffer::Initialize();
+		DrawRedirect::Initialize();
 
 		pDebugVS = Dependencies::CreateVertexShader("IntersectionBlend\\DebugDepth.vso");
 		pDebugPS = Dependencies::CreatePixelShader("IntersectionBlend\\DebugDepth.pso");
@@ -104,34 +125,67 @@ namespace OverlayPass {
 		afParams[3] = 0.0f;
 	}
 
-	static uint32_t RenderTerrainOverlay(IDirect3DDevice9* apDevice, const NiCamera* apCamera, const BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture) {
+	// Returns whether the overlay runs in ground mode this frame.
+	// Ground mode needs the draw redirect. The ground height debug view needs the other ground buffer layout.
+	static bool IsGroundMode() {
+		return Settings::bGroundShading && DrawRedirect::IsReady() && Settings::eDebugMode != Settings::DEBUG_GROUND_HEIGHT;
+	}
+
+	// Returns the lipping mode for `IBOverlayFlags.w`.
+	static float GetLippingMode(bool abGroundMode) {
+		if (abGroundMode)
+			return GROUND_MODE;
+		if (!Settings::bLipping)
+			return 0.0f;
+		return Settings::bUnrolledMapping ? 2.0f : 1.0f;
+	}
+
+	// Replays the landscape passes over the tagged pixels as the terrain overlay. Returns the number of passes drawn.
+	// Takes the scene camera's view projection from before the ground buffer pass changed the renderer's matrices.
+	static uint32_t RenderTerrainOverlay(IDirect3DDevice9* apDevice, const NiCamera* apCamera, const BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apGroundTexture, IDirect3DBaseTexture9* apPointTexture, const D3DXMATRIX& arViewProjection, bool abGroundMode) {
 		NiDX9RenderState* pRenderState = NiDX9Renderer::GetSingleton()->m_pkRenderState;
+		const float fLippingMode = GetLippingMode(abGroundMode);
 
 		D3DVIEWPORT9 kViewport;
 		apDevice->GetViewport(&kViewport);
 
-		// Nothing in the game uses these registers, so they bypass the game's constant caches.
-		float fConstants[OVERLAY_CONSTANT_COUNT][4] = {
-			{ OVERLAY_MAGIC, static_cast<float>(Settings::eDebugMode), Settings::fMaxRayGap, Settings::bLipping ? 1.0f : 0.0f },
-			{},
+		// Set on the device directly. No game shader uses these registers.
+		// c90: camera position in world space. The terrain shaders work in the model space of the landscape block.
+		// That space is world-aligned. The camera position places their fragments in the world (`IsSameGround`).
+		const NiPoint3& kEye = apCamera->m_kWorld.m_Translate;
+		// c92-c93: block index and eye in block model space, set per pass in ground mode.
+		// c94-c96: eye-relative world position to the fog position the terrain shaders build from the clip position:
+		// clip x, clip y, w - z. The renderer works relative to the camera. The scene's view projection takes these positions.
+		const D3DXMATRIX& rVP = arViewProjection;
+		const float fConstants[OVERLAY_CONSTANT_COUNT][4] = {
+			{ OVERLAY_MAGIC, static_cast<float>(Settings::eDebugMode), Settings::fMaxRayGap, fLippingMode },
+			{ kEye.x, kEye.y, kEye.z, 0.0f },
 			{ 1.0f / kViewport.Width, 1.0f / kViewport.Height, Settings::fBlendRange, Settings::fMaxDistance },
+			{ 0.0f, 0.0f, 0.0f, 0.0f },
+			{ 0.0f, 0.0f, 0.0f, 0.0f },
+			{ rVP._11, rVP._21, rVP._31, rVP._41 },
+			{ rVP._12, rVP._22, rVP._32, rVP._42 },
+			{ rVP._14 - rVP._13, rVP._24 - rVP._23, rVP._34 - rVP._33, rVP._44 - rVP._43 },
 		};
-		GetDepthParams(apCamera, fConstants[1]);
 		apDevice->SetPixelShaderConstantF(OVERLAY_CONSTANT_REGISTER, fConstants[0], OVERLAY_CONSTANT_COUNT);
 
-		// The scene depth sampler is outside the game's texture stage cache too. Save and restore it on the device.
+		// The ground samplers are outside the game's texture stage cache too. Save and restore them on the device.
 		static constexpr D3DSAMPLERSTATETYPE eSamplerStates[] = { D3DSAMP_MINFILTER, D3DSAMP_MAGFILTER, D3DSAMP_MIPFILTER, D3DSAMP_ADDRESSU, D3DSAMP_ADDRESSV, D3DSAMP_SRGBTEXTURE };
 		static constexpr DWORD uiSamplerValues[] = { D3DTEXF_POINT, D3DTEXF_POINT, D3DTEXF_NONE, D3DTADDRESS_CLAMP, D3DTADDRESS_CLAMP, FALSE };
-		DWORD uiSavedSamplerValues[ARRAYSIZE(eSamplerStates)];
-		IDirect3DBaseTexture9* pSavedTexture = nullptr;
-		apDevice->GetTexture(SCENE_DEPTH_SAMPLER, &pSavedTexture);
-		for (uint32_t i = 0; i < ARRAYSIZE(eSamplerStates); i++) {
-			apDevice->GetSamplerState(SCENE_DEPTH_SAMPLER, eSamplerStates[i], &uiSavedSamplerValues[i]);
-			apDevice->SetSamplerState(SCENE_DEPTH_SAMPLER, eSamplerStates[i], uiSamplerValues[i]);
+		IDirect3DBaseTexture9* const pGroundTextures[GROUND_SAMPLER_COUNT] = { apGroundTexture, apPointTexture };
+		DWORD uiSavedSamplerValues[GROUND_SAMPLER_COUNT][ARRAYSIZE(eSamplerStates)];
+		IDirect3DBaseTexture9* pSavedTextures[GROUND_SAMPLER_COUNT] = {};
+		for (uint32_t uiSampler = 0; uiSampler < GROUND_SAMPLER_COUNT; uiSampler++) {
+			const uint32_t uiStage = GROUND_BUFFER_SAMPLER + uiSampler;
+			apDevice->GetTexture(uiStage, &pSavedTextures[uiSampler]);
+			for (uint32_t i = 0; i < ARRAYSIZE(eSamplerStates); i++) {
+				apDevice->GetSamplerState(uiStage, eSamplerStates[i], &uiSavedSamplerValues[uiSampler][i]);
+				apDevice->SetSamplerState(uiStage, eSamplerStates[i], uiSamplerValues[i]);
+			}
+			apDevice->SetTexture(uiStage, pGroundTextures[uiSampler]);
 		}
-		apDevice->SetTexture(SCENE_DEPTH_SAMPLER, apDepthTexture);
 
-		// Depth Resolve's RESZ resolve binds the depth texture to stage 0 without going through the game's texture cache.
+		// Depth Resolve's RESZ resolve binds the depth texture to stage 0 behind the game's texture cache.
 		// Clear the cached terrain stages so every replayed pass binds its own textures.
 		for (uint32_t i = 0; i < TERRAIN_SAMPLER_COUNT; i++)
 			pRenderState->SetTexture(i, nullptr);
@@ -141,15 +195,17 @@ namespace OverlayPass {
 			ForcedRenderStates kStates(pRenderState);
 			kStates.Force(D3DRS_ZENABLE, D3DZB_FALSE);
 			kStates.Force(D3DRS_ZWRITEENABLE, FALSE);
-			// Only over pixels of statics tagged during the opaque stage. D3D9 runs the stencil test with the depth test off.
+			// Draw only over pixels of statics tagged in the opaque stage. D3D9 runs the stencil test with the depth test off.
+			// The first overlay fragment drawn on a sample clears its tag. Only one terrain layer blends there.
+			// Fragments discarded by `clip` leave the tag for the layers behind them.
 			if (Settings::bStencilTags) {
 				kStates.Force(D3DRS_STENCILENABLE, TRUE);
 				kStates.Force(D3DRS_TWOSIDEDSTENCILMODE, FALSE);
 				kStates.Force(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
 				kStates.Force(D3DRS_STENCILREF, StencilTags::TERRAIN_BLEND_BIT);
 				kStates.Force(D3DRS_STENCILMASK, StencilTags::TERRAIN_BLEND_BIT);
-				kStates.Force(D3DRS_STENCILWRITEMASK, 0);
-				kStates.Force(D3DRS_STENCILPASS, D3DSTENCILOP_KEEP);
+				kStates.Force(D3DRS_STENCILWRITEMASK, StencilTags::TERRAIN_BLEND_BIT);
+				kStates.Force(D3DRS_STENCILPASS, D3DSTENCILOP_ZERO);
 				kStates.Force(D3DRS_STENCILFAIL, D3DSTENCILOP_KEEP);
 				kStates.Force(D3DRS_STENCILZFAIL, D3DSTENCILOP_KEEP);
 			}
@@ -165,24 +221,60 @@ namespace OverlayPass {
 			kStates.Force(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
 			kStates.Force(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE);
 
-			uiPasses = TerrainPasses::Replay(apTarget);
+			if (abGroundMode) {
+				// Every pass draws a full-screen triangle instead of its block's mesh, through `DrawRedirect`.
+				// Each pixel is shaded by the pass of the block its ground point lies in. The shader identifies the block by c92.
+				kStates.Force(D3DRS_CULLMODE, D3DCULL_NONE);
+				kStates.Force(D3DRS_SCISSORTESTENABLE, FALSE);
+
+				DrawRedirect::ConsumeCount();
+				DrawRedirect::SetArmed(true);
+				// Landscape blocks are only translated. Their model space is centred on the cell.
+				uiPasses = TerrainPasses::Replay(apTarget, nullptr, [apDevice, &kEye](const NiGeometry* apGeometry) {
+					const NiBound* pBound = apGeometry->m_pWorldBound;
+					const NiPoint3& kTranslate = apGeometry->m_kWorld.m_Translate;
+					const float fBlock[2][4] = {
+						{
+							pBound ? std::floor(pBound->m_kCenter.x / LANDSCAPE_BLOCK_SIZE) : 0.0f,
+							pBound ? std::floor(pBound->m_kCenter.y / LANDSCAPE_BLOCK_SIZE) : 0.0f,
+							0.0f, 0.0f,
+						},
+						{ kEye.x - kTranslate.x, kEye.y - kTranslate.y, kEye.z - kTranslate.z, 0.0f },
+					};
+					apDevice->SetPixelShaderConstantF(BLOCK_CONSTANT_REGISTER, fBlock[0], 2);
+				});
+				DrawRedirect::SetArmed(false);
+
+				static uint32_t uiLoggedGroundFrames = 0;
+				if (uiLoggedGroundFrames < 3) {
+					uiLoggedGroundFrames++;
+					_MESSAGE("Ground mode: %u landscape passes replayed, %u draws redirected", uiPasses, DrawRedirect::ConsumeCount());
+				}
+			}
+			else {
+				uiPasses = TerrainPasses::Replay(apTarget);
+			}
 		}
 
 		const float fZero[OVERLAY_CONSTANT_COUNT][4] = {};
 		apDevice->SetPixelShaderConstantF(OVERLAY_CONSTANT_REGISTER, fZero[0], OVERLAY_CONSTANT_COUNT);
 
-		apDevice->SetTexture(SCENE_DEPTH_SAMPLER, pSavedTexture);
-		if (pSavedTexture)
-			pSavedTexture->Release();
-		for (uint32_t i = 0; i < ARRAYSIZE(eSamplerStates); i++)
-			apDevice->SetSamplerState(SCENE_DEPTH_SAMPLER, eSamplerStates[i], uiSavedSamplerValues[i]);
+		for (uint32_t uiSampler = 0; uiSampler < GROUND_SAMPLER_COUNT; uiSampler++) {
+			const uint32_t uiStage = GROUND_BUFFER_SAMPLER + uiSampler;
+			apDevice->SetTexture(uiStage, pSavedTextures[uiSampler]);
+			if (pSavedTextures[uiSampler])
+				pSavedTextures[uiSampler]->Release();
+			for (uint32_t i = 0; i < ARRAYSIZE(eSamplerStates); i++)
+				apDevice->SetSamplerState(uiStage, eSamplerStates[i], uiSavedSamplerValues[uiSampler][i]);
+		}
 
 		return uiPasses;
 	}
 
-	// Draws the fullscreen debug view for the current debug mode: depth bands, or the stencil tags.
-	static void DrawDebugView(IDirect3DDevice9* apDevice, const NiCamera* apCamera, IDirect3DBaseTexture9* apDepthTexture) {
-		// Capture everything we touch so the game's render state cache stays coherent.
+	// Draws the full-screen debug view for the current debug mode: depth bands, stencil tags or ground height.
+	// The given texture is the scene depth, or the ground buffer for the ground height view.
+	static void DrawDebugView(IDirect3DDevice9* apDevice, const NiCamera* apCamera, IDirect3DBaseTexture9* apTexture) {
+		// Capture all device state and restore it afterwards. The game's render state cache then stays valid.
 		IDirect3DStateBlock9* pStateBlock = nullptr;
 		if (FAILED(apDevice->CreateStateBlock(D3DSBT_ALL, &pStateBlock)))
 			return;
@@ -222,7 +314,7 @@ namespace OverlayPass {
 		apDevice->SetRenderState(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
 		apDevice->SetRenderState(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE);
 
-		apDevice->SetTexture(0, apDepthTexture);
+		apDevice->SetTexture(0, apTexture);
 		apDevice->SetSamplerState(0, D3DSAMP_MINFILTER, D3DTEXF_POINT);
 		apDevice->SetSamplerState(0, D3DSAMP_MAGFILTER, D3DTEXF_POINT);
 		apDevice->SetSamplerState(0, D3DSAMP_MIPFILTER, D3DTEXF_NONE);
@@ -246,6 +338,8 @@ namespace OverlayPass {
 		pStateBlock->Release();
 	}
 
+	// Logs changes in the render flow, such as frames without a post-resolve callback while the game is paused.
+	// Call once per main loop iteration, before the frame is rendered.
 	void OnMainLoop() {
 		static constexpr uint32_t MAX_LOG_LINES = 200;
 
@@ -274,6 +368,7 @@ namespace OverlayPass {
 		bRendering = uiCallbacks != 0;
 	}
 
+	// Renders the ground buffer, the terrain overlay and the debug views for the frame, then clears the stencil tags.
 	void __cdecl OnPostResolveDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture) {
 		uiFrameCallbacks++;
 
@@ -284,17 +379,34 @@ namespace OverlayPass {
 
 		IDirect3DDevice9* pDevice = NiDX9Renderer::GetSingleton()->GetD3DDevice();
 
-		// Without this frame's tags the stencil buffer holds nothing the overlay could test against.
+		// Without tags from this frame, the stencil buffer holds nothing for the overlay to test against.
 		const bool bTagged = StencilTags::HasTags(apTarget);
+		const bool bOverlay = bOverlayShadersReady && (bTagged || !Settings::bStencilTags);
+
+		// Copy the scene camera's matrices before the ground buffer pass changes them.
+		NiDX9Renderer* pRenderer = NiDX9Renderer::GetSingleton();
+		D3DXMATRIX kViewProjection;
+		D3DXMatrixMultiply(&kViewProjection, pRenderer->GetD3DView(), pRenderer->GetD3DProj());
+
+		const bool bGroundMode = IsGroundMode();
+
+		IDirect3DTexture9* pGroundTexture = nullptr;
+		if (bOverlay || Settings::eDebugMode == Settings::DEBUG_GROUND_HEIGHT)
+			pGroundTexture = GroundBuffer::Render(pDevice, apAccumulator->m_pkCamera, apTarget, apDepthTexture, bGroundMode);
+
+		// Draw before the overlay. The overlay clears the tags it draws over.
+		if (bDebugReady && Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS && bTagged)
+			DrawDebugView(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
 
 		uint32_t uiPasses = 0;
-		if (bOverlayShadersReady && (bTagged || !Settings::bStencilTags))
-			uiPasses = RenderTerrainOverlay(pDevice, apAccumulator->m_pkCamera, apTarget, apDepthTexture);
+		if (bOverlay && pGroundTexture)
+			uiPasses = RenderTerrainOverlay(pDevice, apAccumulator->m_pkCamera, apTarget, pGroundTexture, GroundBuffer::GetPointTexture(), kViewProjection, bGroundMode);
 		TerrainPasses::Clear();
 
-		const bool bDebugView = Settings::eDebugMode == Settings::DEBUG_DEPTH_BANDS || (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS && bTagged);
-		if (bDebugReady && bDebugView)
+		if (bDebugReady && Settings::eDebugMode == Settings::DEBUG_DEPTH_BANDS)
 			DrawDebugView(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
+		else if (bDebugReady && Settings::eDebugMode == Settings::DEBUG_GROUND_HEIGHT && pGroundTexture)
+			DrawDebugView(pDevice, apAccumulator->m_pkCamera, pGroundTexture);
 
 		StencilTags::Clear(pDevice);
 
@@ -304,4 +416,5 @@ namespace OverlayPass {
 			uiLoggedFrames++;
 		}
 	}
+
 }

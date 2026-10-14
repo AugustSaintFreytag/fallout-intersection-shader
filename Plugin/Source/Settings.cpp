@@ -3,6 +3,7 @@
 #include <sstream>
 
 namespace Settings {
+
 	static constexpr const char* INI_PATH = "Data\\NVSE\\Plugins\\IntersectionBlend.ini";
 
 	struct FormTypeName {
@@ -69,7 +70,8 @@ namespace Settings {
 		return kTypes;
 	}
 
-	// Reads a section with one base form per line, written as Plugin.esm:FormID. The load order byte of the form ID is ignored.
+	// Reads an INI section with one base form per line, written as `Plugin.esm:FormID`.
+	// Drops the load order byte of the form ID.
 	static std::vector<FormEntry> GetFormList(const char* apSection) {
 		std::vector<char> kBuffer(32767);
 		const DWORD uiLength = GetPrivateProfileSection(apSection, kBuffer.data(), static_cast<DWORD>(kBuffer.size()), INI_PATH);
@@ -94,10 +96,13 @@ namespace Settings {
 		return kEntries;
 	}
 
+	// Reads `IntersectionBlend.ini`. Missing keys keep their defaults.
 	void Load() {
 		bEnabled				= GetUInt("Main", "bEnabled", bEnabled) != 0;
 		bStencilTags			= GetUInt("Main", "bStencilTags", bStencilTags) != 0;
 		bLipping				= GetUInt("Blend", "bLipping", bLipping) != 0;
+		bUnrolledMapping		= GetUInt("Blend", "bUnrolledMapping", bUnrolledMapping) != 0;
+		bGroundShading			= GetUInt("Blend", "bGroundShading", bGroundShading) != 0;
 		fMaxDistance			= GetFloat("Blend", "fMaxDistance", fMaxDistance);
 		fBlendRange				= GetFloat("Blend", "fBlendRange", fBlendRange);
 		fMaxRayGap				= GetFloat("Blend", "fMaxRayGap", fMaxRayGap);
@@ -105,8 +110,9 @@ namespace Settings {
 		kTerrainBlendBlacklist	= GetFormList("TerrainBlendBlacklist");
 		eDebugMode				= static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
 
-		_MESSAGE("Settings: stencil tags %u, lipping %u", bStencilTags, bLipping);
+		_MESSAGE("Settings: stencil tags %u, lipping %u, unrolled mapping %u, ground shading %u", bStencilTags, bLipping, bUnrolledMapping, bGroundShading);
 		_MESSAGE("Settings: enabled %u, max distance %.1f, blend range %.1f, max ray gap %.1f, %u terrain blend types, %u blacklist entries, debug mode %u",
 			bEnabled, fMaxDistance, fBlendRange, fMaxRayGap, static_cast<uint32_t>(kTerrainBlendTypes.size()), static_cast<uint32_t>(kTerrainBlendBlacklist.size()), eDebugMode);
 	}
+
 }
