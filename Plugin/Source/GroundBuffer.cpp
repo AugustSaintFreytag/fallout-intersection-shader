@@ -1,6 +1,8 @@
 #include "GroundBuffer.hpp"
 
 #include "Dependencies.hpp"
+#include "DrawRedirect.hpp"
+#include "GroundShaders.hpp"
 #include "Profiler.hpp"
 #include "RenderStates.hpp"
 #include "Settings.hpp"
@@ -23,7 +25,7 @@ ASSERT_OFFSET(NiDX9Renderer, m_kD3DProj, 0x9C0);
 // Two steps run right before the overlay:
 // 1. Height field: an orthographic camera looking straight down draws the recorded landscape passes again, into a
 //    depth texture around the camera. Terrain does not move. The field is only redrawn in full when the camera moves
-//    away from its centre. In between, only landscape blocks not in it yet are drawn. The terrain shaders write blend
+//    away from its centre. In between, only landscape blocks not in it yet are drawn. The field shader writes blend
 //    weights and vertex colour into the attribute fields in the same draw. Both are per vertex, 128 units apart.
 //    The fields hold them without loss at 8 units per texel.
 // 2. Ground buffer: a full-screen pass rebuilds every visible surface point from the scene depth and looks up the
@@ -43,10 +45,7 @@ namespace GroundBuffer {
 	static constexpr float		FIELD_RECENTER_DISTANCE	= 512.0f;
 	static constexpr uint32_t	TERRAIN_SAMPLER_COUNT	= 14;	// `BaseMap[7]` and `NormalMap[7]`
 
-	// Must match "Shaders/Includes/TerrainOverlay.hlsli". In the height field replay, the terrain shaders write blend
-	// weights and vertex colour into the attribute fields instead of shading.
-	static constexpr float		FIELD_MAGIC				= 7907.0f;
-	static constexpr uint32_t	FIELD_CONSTANT_REGISTER	= 89;	// `IBOverlayFlags`
+	// Must match "Shaders/Ground/GroundField.hlsl".
 	static constexpr uint32_t	BLOCK_CONSTANT_REGISTER	= 92;	// `IBBlock`
 	static constexpr float		LANDSCAPE_BLOCK_SIZE	= 2048.0f;
 
@@ -297,10 +296,6 @@ namespace GroundBuffer {
 		if (bFull)
 			apDevice->Clear(0, nullptr, D3DCLEAR_ZBUFFER, 0, 0.0f, 0); // Reversed depth: 0 is the far plane.
 
-		// Set on the device directly. No game shader uses these registers.
-		const float fFieldFlags[4] = { FIELD_MAGIC, 0.0f, 0.0f, 0.0f };
-		apDevice->SetPixelShaderConstantF(FIELD_CONSTANT_REGISTER, fFieldFlags, 1);
-
 		RenderStates::SyncTextureStages(pRenderState, apDevice, TERRAIN_SAMPLER_COUNT);
 
 		uint32_t uiDrawn = 0;
@@ -322,9 +317,12 @@ namespace GroundBuffer {
 			// Set on the device directly. LOD Flicker Fix remaps every `D3DRS_ZFUNC` set through `NiDX9RenderState`.
 			// `D3DCMP_GREATEREQUAL` keeps the highest terrain with reversed depth. The cached value is restored after the replay.
 			apDevice->SetRenderState(D3DRS_ZFUNC, D3DCMP_GREATEREQUAL);
-			// The terrain shaders store the block code with the attributes.
+			// Every draw uses the field shader. It stores the block code with the attributes.
+			// Set on the device directly. No game shader uses c92.
 			// Reference at "Shaders/Includes/Packing.hlsli", "GetBlockCode".
-			uiDrawn = TerrainPasses::Replay(apTarget, AddToField, [apDevice](const NiGeometry* apGeometry) {
+			DrawRedirect::SetMode(DrawRedirect::MODE_SHADER);
+			uiDrawn = TerrainPasses::Replay(apTarget, AddToField, [apDevice](const NiGeometry* apGeometry, uint32_t) {
+				DrawRedirect::BeginPass(GroundShaders::GetFieldShader());
 				const NiBound* pBound = apGeometry->m_pWorldBound;
 				const float fBlock[4] = {
 					pBound ? std::floor(pBound->m_kCenter.x / LANDSCAPE_BLOCK_SIZE) : 0.0f,
@@ -333,12 +331,9 @@ namespace GroundBuffer {
 				};
 				apDevice->SetPixelShaderConstantF(BLOCK_CONSTANT_REGISTER, fBlock, 1);
 			});
+			DrawRedirect::SetMode(DrawRedirect::MODE_OFF);
 			apDevice->SetRenderState(D3DRS_ZFUNC, pRenderState->m_akRenderStateSettings[D3DRS_ZFUNC].m_uiCurrValue);
 		}
-
-		const float fZero[4] = {};
-		apDevice->SetPixelShaderConstantF(FIELD_CONSTANT_REGISTER, fZero, 1);
-		apDevice->SetPixelShaderConstantF(BLOCK_CONSTANT_REGISTER, fZero, 1);
 
 		for (uint32_t i = 1; i < FIELD_TARGET_COUNT; i++)
 			apDevice->SetRenderTarget(i, nullptr);
