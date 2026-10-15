@@ -301,9 +301,7 @@ namespace GroundBuffer {
 		const float fFieldFlags[4] = { FIELD_MAGIC, 0.0f, 0.0f, 0.0f };
 		apDevice->SetPixelShaderConstantF(FIELD_CONSTANT_REGISTER, fFieldFlags, 1);
 
-		// Depth Resolve's RESZ resolve binds the depth texture to stage 0 behind the game's texture cache.
-		for (uint32_t i = 0; i < TERRAIN_SAMPLER_COUNT; i++)
-			pRenderState->SetTexture(i, nullptr);
+		RenderStates::SyncTextureStages(pRenderState, apDevice, TERRAIN_SAMPLER_COUNT);
 
 		uint32_t uiDrawn = 0;
 		{

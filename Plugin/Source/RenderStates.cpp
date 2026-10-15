@@ -44,6 +44,18 @@ namespace RenderStates {
 	}
 
 	// Returns the last change requested for the given state since tracking started.
+	// Binds the textures the render state cache holds for the first stages again on the device.
+	//
+	// Depth Resolve's RESZ resolve binds the depth texture to stage 0 behind the cache. A replayed pass whose texture
+	// matches the cache entry would then draw with the depth texture. Clearing the cache entries instead unbinds the
+	// textures on the device. A pass the game skips setting up, because it counts as set up already, then draws
+	// without textures and turns black. With the device matching the cache, both cases draw with the right textures.
+	// Not verified: which game check skips the setup.
+	void SyncTextureStages(NiDX9RenderState* apRenderState, IDirect3DDevice9* apDevice, uint32_t auiStageCount) {
+		for (uint32_t i = 0; i < auiStageCount; i++)
+			apDevice->SetTexture(i, apRenderState->m_apkTextureStageTextures[i]);
+	}
+
 	const Request& GetRequest(D3DRENDERSTATETYPE aeState) {
 		return kRequests[aeState];
 	}

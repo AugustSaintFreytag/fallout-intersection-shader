@@ -24,6 +24,8 @@ namespace RenderStates {
 
 	const Request& GetRequest(D3DRENDERSTATETYPE aeState);
 
+	void SyncTextureStages(NiDX9RenderState* apRenderState, IDirect3DDevice9* apDevice, uint32_t auiStageCount);
+
 }
 
 // Forces render states at the `NiDX9RenderState` level for the lifetime of the object, then restores them.

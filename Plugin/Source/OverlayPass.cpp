@@ -368,10 +368,7 @@ namespace OverlayPass {
 			apDevice->SetTexture(uiStage, pGroundTextures[uiSampler]);
 		}
 
-		// Depth Resolve's RESZ resolve binds the depth texture to stage 0 behind the game's texture cache.
-		// Clear the cached terrain stages so every replayed pass binds its own textures.
-		for (uint32_t i = 0; i < TERRAIN_SAMPLER_COUNT; i++)
-			pRenderState->SetTexture(i, nullptr);
+		RenderStates::SyncTextureStages(pRenderState, apDevice, TERRAIN_SAMPLER_COUNT);
 
 		uint32_t uiPasses = 0;
 		{
@@ -418,10 +415,6 @@ namespace OverlayPass {
 				const float fMargin = Settings::fBlendRange * LIP_REACH;
 				const double dScreenArea = static_cast<double>(kViewport.Width) * kViewport.Height;
 				double dScissoredScreens = 0.0;
-
-				// A tagged pixel runs the shader of every block that draws before its own. Its own block clears the tag.
-				// Most tagged area belongs to statics near the camera, whose ground points lie in the blocks around it.
-				TerrainPasses::SortNearestFirst(kEye);
 
 				DrawRedirect::ConsumeCounts();
 				DrawRedirect::SetArmed(true);
