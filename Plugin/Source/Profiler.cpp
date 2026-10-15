@@ -48,7 +48,9 @@ namespace Profiler {
 	static Accumulator			kStageTimes[STAGE_COUNT];
 	static Accumulator			kReplayCpu;
 	static Accumulator			kPasses;
-	static Accumulator			kRedirected;
+	static Accumulator			kDrawn;
+	static Accumulator			kSkipped;
+	static uint32_t				uiForeignDraws			= 0;
 	static uint32_t				uiGpuFrames				= 0;
 	static uint32_t				uiReplayFrames			= 0;
 	static uint32_t				uiDroppedFrames			= 0;
@@ -157,16 +159,18 @@ namespace Profiler {
 			_MESSAGE("%s", cLine);
 		}
 		if (uiReplayFrames) {
-			_MESSAGE("Profile, replay: CPU ms avg/max %.2f/%.2f, passes avg/max %.1f/%.0f, redirected draws avg/max %.1f/%.0f",
+			_MESSAGE("Profile, replay: CPU ms avg/max %.2f/%.2f, passes avg/max %.1f/%.0f, triangles avg/max %.1f/%.0f, skipped draws avg/max %.1f/%.0f, %u skipped with another vertex buffer",
 				kReplayCpu.dSum / uiReplayFrames, kReplayCpu.dMax, kPasses.dSum / uiReplayFrames, kPasses.dMax,
-				kRedirected.dSum / uiReplayFrames, kRedirected.dMax);
+				kDrawn.dSum / uiReplayFrames, kDrawn.dMax, kSkipped.dSum / uiReplayFrames, kSkipped.dMax, uiForeignDraws);
 		}
 
 		for (Accumulator& rTime : kStageTimes)
 			rTime = {};
 		kReplayCpu = {};
 		kPasses = {};
-		kRedirected = {};
+		kDrawn = {};
+		kSkipped = {};
+		uiForeignDraws = 0;
 		uiGpuFrames = 0;
 		uiReplayFrames = 0;
 		uiDroppedFrames = 0;
@@ -226,13 +230,16 @@ namespace Profiler {
 		bInFrame = false;
 	}
 
-	// Records the work of one overlay replay: passes drawn, draws redirected and CPU time spent issuing them.
-	void RecordReplay(uint32_t auiPasses, uint32_t auiRedirected, double adCpuMilliseconds) {
+	// Records the work of one overlay replay: passes, full-screen triangles drawn, draws skipped, skipped draws with
+	// another vertex buffer, and the CPU time spent issuing them.
+	void RecordReplay(uint32_t auiPasses, uint32_t auiDrawn, uint32_t auiSkipped, uint32_t auiForeign, double adCpuMilliseconds) {
 		if (!Settings::bProfile)
 			return;
 
 		kPasses.Add(auiPasses);
-		kRedirected.Add(auiRedirected);
+		kDrawn.Add(auiDrawn);
+		kSkipped.Add(auiSkipped);
+		uiForeignDraws += auiForeign;
 		kReplayCpu.Add(adCpuMilliseconds);
 		uiReplayFrames++;
 	}

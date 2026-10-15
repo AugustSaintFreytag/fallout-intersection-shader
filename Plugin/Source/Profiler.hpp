@@ -18,6 +18,6 @@ namespace Profiler {
 
 	void EndFrame();
 
-	void RecordReplay(uint32_t auiPasses, uint32_t auiRedirected, double adCpuMilliseconds);
+	void RecordReplay(uint32_t auiPasses, uint32_t auiDrawn, uint32_t auiSkipped, uint32_t auiForeign, double adCpuMilliseconds);
 
 }
