@@ -15,13 +15,16 @@
 #include <unordered_set>
 #include <utility>
 
-// Tags the pixels of statics that may blend with terrain in the stencil buffer while the opaque world is drawn.
+// Tags the pixels of statics that may blend in the stencil buffer while the opaque world is drawn.
 //
-// The opaque stage runs with stencil writes forced on. Every batch-rendered pass replaces the tag bit. Eligible
-// statics set it. Everything else clears it where it draws in front, such as terrain, actors and other statics.
-// The overlay pass only draws where the bit is set and clears the stencil buffer afterwards.
+// The opaque stage runs with stencil writes forced on. Every batch-rendered pass replaces the tag bits. Statics that
+// may blend with terrain set `TERRAIN_BLEND_BIT`, toppers for static-to-static blending set `TOPPER_BIT`. Everything
+// else clears both where it draws in front, such as terrain, actors and other statics. The overlay pass only draws
+// where `TERRAIN_BLEND_BIT` is set. The stencil buffer is cleared after it.
 //
-// A reference is eligible if its base form type is in the INI type list and its form ID is not blacklisted.
+// A reference may blend with terrain if its base form type is in the INI type list and its base form is not
+// blacklisted. It is a topper if its base form is in the topper list. Both lists take editor IDs. Most editor IDs
+// are only kept in memory with JohnnyGuitar NVSE.
 // Geometry whose bound lies entirely beyond `fMaxDistance` in view depth is not tagged. The overlay is fully faded
 // out there, and every tagged pixel costs terrain shader runs in the overlay replay.
 //
@@ -43,11 +46,11 @@ namespace StencilTags {
 	static constexpr uint32_t REFR_BASE_FORM			= 0x20;		// `TESForm*`
 	static constexpr uint32_t FORM_TYPE_ID				= 0x04;		// `uint8_t`
 	static constexpr uint32_t FORM_REF_ID				= 0x0C;		// `uint32_t`
-	static constexpr uint32_t DATA_HANDLER				= 0x11C3F2C;	// `DataHandler*`
-	static constexpr uint32_t DATA_HANDLER_MOD_COUNT	= 0x218;	// `ModList::loadedModCount`
-	static constexpr uint32_t DATA_HANDLER_MODS			= 0x21C;	// `ModList::loadedMods`, `ModInfo*[255]`
-	static constexpr uint32_t MOD_INFO_NAME				= 0x20;		// `char[0x104]`
-	static constexpr uint32_t MOD_INFO_INDEX			= 0x40C;	// `uint8_t`
+
+	// `TESForm::GetFormByEditorID` (GAME - 0x483A00), cdecl `TESForm* (const char*)`.
+	// JohnnyGuitar NVSE replaces it with a lookup in the editor ID map it fills for all form types it covers.
+	// Reference at JohnnyGuitar NVSE, "JG/internal/JG/EditorIDRestoration.cpp".
+	static constexpr uint32_t GET_FORM_BY_EDITOR_ID		= 0x483A00;
 
 	static constexpr uint32_t MAX_PARENT_DEPTH			= 64;
 
@@ -57,14 +60,15 @@ namespace StencilTags {
 	static CallDetour							kCombinedDetour;
 	static bool									bEnabled			= true;
 	static bool									bTypeEligible[256]	= {};
-	static std::unordered_set<uint32_t>			kBlacklist;
+	static std::unordered_set<uint32_t>			kBlacklist;			// Base form IDs
+	static std::unordered_set<uint32_t>			kToppers;			// Base form IDs
 	static std::unique_ptr<ForcedRenderStates>	pTaggingStates;
 	static const BSRenderedTexture*				pTaggedTarget		= nullptr;
 	static uint32_t								uiTaggedStages		= 0;
 
-	// Geometry and verdict of the last pass. Lit geometry draws one pass per light group, back to back.
+	// Geometry and tag bits of the last pass. Lit geometry draws one pass per light group, back to back.
 	static const NiGeometry*					pLastGeometry		= nullptr;
-	static bool									bLastEligible		= false;
+	static uint32_t								uiLastTags			= 0;
 
 	// Camera of the tagged stage, for the distance limit.
 	static NiPoint3								kEye;
@@ -72,6 +76,7 @@ namespace StencilTags {
 
 	// Geometry verdicts since the last `ConsumeCounts`
 	static uint32_t								uiTaggedGeometry	= 0;
+	static uint32_t								uiTopperGeometry	= 0;
 	static uint32_t								uiDistantGeometry	= 0;
 
 	template <typename T>
@@ -104,52 +109,52 @@ namespace StencilTags {
 		return fDepth - pBound->m_fRadius <= Settings::fMaxDistance;
 	}
 
-	static bool IsEligible(const NiGeometry* apGeometry) {
+	// Returns the tag bits for the reference that owns the given geometry, 0 if it gets none.
+	static uint32_t GetTags(const NiGeometry* apGeometry) {
 		const void* pReference = GetParentReference(apGeometry);
 		if (!pReference)
-			return false;
+			return 0;
 
 		const void* pBaseForm = Field<const void*>(pReference, REFR_BASE_FORM);
-		if (!pBaseForm || !bTypeEligible[Field<uint8_t>(pBaseForm, FORM_TYPE_ID)])
-			return false;
+		if (!pBaseForm)
+			return 0;
 
-		return kBlacklist.empty() || !kBlacklist.contains(Field<uint32_t>(pBaseForm, FORM_REF_ID));
+		const uint32_t uiFormID = Field<uint32_t>(pBaseForm, FORM_REF_ID);
+		uint32_t uiTags = 0;
+		if (bTypeEligible[Field<uint8_t>(pBaseForm, FORM_TYPE_ID)] && !kBlacklist.contains(uiFormID))
+			uiTags |= TERRAIN_BLEND_BIT;
+		if (kToppers.contains(uiFormID))
+			uiTags |= TOPPER_BIT;
+		return uiTags;
 	}
 
-	// Returns the load order index of a loaded plugin, or -1.
-	static int32_t GetModIndex(const char* apName) {
-		const void* pDataHandler = *reinterpret_cast<void**>(DATA_HANDLER);
-		if (!pDataHandler)
-			return -1;
-
-		const uint32_t uiCount = std::min<uint32_t>(Field<uint32_t>(pDataHandler, DATA_HANDLER_MOD_COUNT), 0xFF);
-		const void* const* ppMods = reinterpret_cast<const void* const*>(reinterpret_cast<const uint8_t*>(pDataHandler) + DATA_HANDLER_MODS);
-		for (uint32_t i = 0; i < uiCount; i++) {
-			const void* pMod = ppMods[i];
-			if (pMod && !_stricmp(reinterpret_cast<const char*>(pMod) + MOD_INFO_NAME, apName))
-				return Field<uint8_t>(pMod, MOD_INFO_INDEX);
+	// Resolves editor IDs to form IDs through the game's editor ID lookup. Logs every editor ID without a form.
+	// Returns the form IDs.
+	static std::unordered_set<uint32_t> ResolveEditorIDs(const std::vector<std::string>& arEditorIDs, const char* apListName) {
+		std::unordered_set<uint32_t> kFormIDs;
+		for (const std::string& rEditorID : arEditorIDs) {
+			const void* pForm = CdeclCall<const void*>(GET_FORM_BY_EDITOR_ID, rEditorID.c_str());
+			if (pForm)
+				kFormIDs.insert(Field<uint32_t>(pForm, FORM_REF_ID));
+			else
+				_MESSAGE("%s: no form with editor ID %s, skipped", apListName, rEditorID.c_str());
 		}
-		return -1;
+		return kFormIDs;
 	}
 
-	// Resolves the INI selection against the load order.
+	// Resolves the INI selection against the loaded forms.
 	// Call once the game data is loaded, at NVSE DeferredInit.
 	void LoadSelection() {
 		std::fill(std::begin(bTypeEligible), std::end(bTypeEligible), false);
 		for (uint8_t ucType : Settings::kTerrainBlendTypes)
 			bTypeEligible[ucType] = true;
 
-		kBlacklist.clear();
-		for (const Settings::FormEntry& rEntry : Settings::kTerrainBlendBlacklist) {
-			const int32_t iModIndex = GetModIndex(rEntry.sPlugin.c_str());
-			if (iModIndex < 0) {
-				_MESSAGE("Terrain blend blacklist: %s is not loaded, skipped %s:%06X", rEntry.sPlugin.c_str(), rEntry.sPlugin.c_str(), rEntry.uiFormID);
-				continue;
-			}
-			kBlacklist.insert((static_cast<uint32_t>(iModIndex) << 24) | rEntry.uiFormID);
-		}
+		kBlacklist	= ResolveEditorIDs(Settings::kTerrainBlendBlacklist, "Terrain blend blacklist");
+		kToppers	= ResolveEditorIDs(Settings::kStaticBlendToppers, "Static blend toppers");
 
-		_MESSAGE("Terrain blend selection: %u form types, %u blacklisted base forms", static_cast<uint32_t>(Settings::kTerrainBlendTypes.size()), static_cast<uint32_t>(kBlacklist.size()));
+		_MESSAGE("Terrain blend selection: %u form types, %u of %u blacklisted base forms found", static_cast<uint32_t>(Settings::kTerrainBlendTypes.size()),
+			static_cast<uint32_t>(kBlacklist.size()), static_cast<uint32_t>(Settings::kTerrainBlendBlacklist.size()));
+		_MESSAGE("Static blend selection: %u of %u toppers found", static_cast<uint32_t>(kToppers.size()), static_cast<uint32_t>(Settings::kStaticBlendToppers.size()));
 	}
 
 	static void BeginTagging(const BSShaderAccumulator* apAccumulator) {
@@ -172,7 +177,7 @@ namespace StencilTags {
 		pTaggingStates->Force(D3DRS_STENCILPASS, D3DSTENCILOP_REPLACE);
 		pTaggingStates->Force(D3DRS_STENCILFAIL, D3DSTENCILOP_KEEP);
 		pTaggingStates->Force(D3DRS_STENCILZFAIL, D3DSTENCILOP_KEEP);
-		pTaggingStates->Force(D3DRS_STENCILWRITEMASK, TERRAIN_BLEND_BIT);
+		pTaggingStates->Force(D3DRS_STENCILWRITEMASK, TAG_BITS);
 		pTaggingStates->Force(D3DRS_STENCILREF, 0);
 
 		pTaggedTarget	= BSShaderManager::GetCurrentRenderTarget();
@@ -225,7 +230,7 @@ namespace StencilTags {
 		bEnabled = abEnabled;
 	}
 
-	// Sets the tag reference if the geometry of the given render pass is eligible.
+	// Sets the tag reference to the tag bits of the geometry of the given render pass, if it gets any.
 	// Call before every batch-rendered pass draw. Returns true if `EndPass` has to be called after the draw.
 	bool BeginPass(const void* apRenderPass) {
 		if (!pTaggingStates || !apRenderPass)
@@ -234,20 +239,22 @@ namespace StencilTags {
 		const NiGeometry* pGeometry = static_cast<const BSShaderProperty::RenderPass*>(apRenderPass)->pGeometry;
 		if (pGeometry != pLastGeometry) {
 			pLastGeometry = pGeometry;
-			bLastEligible = pGeometry && IsEligible(pGeometry);
-			if (bLastEligible && !IsInRange(pGeometry)) {
-				bLastEligible = false;
+			uiLastTags = pGeometry ? GetTags(pGeometry) : 0;
+			if (uiLastTags && !IsInRange(pGeometry)) {
+				uiLastTags = 0;
 				uiDistantGeometry++;
 			}
-			else if (bLastEligible) {
+			else if (uiLastTags) {
 				uiTaggedGeometry++;
+				if (uiLastTags & TOPPER_BIT)
+					uiTopperGeometry++;
 			}
 		}
 
-		if (!bLastEligible)
+		if (!uiLastTags)
 			return false;
 
-		pTaggingStates->Update(D3DRS_STENCILREF, TERRAIN_BLEND_BIT);
+		pTaggingStates->Update(D3DRS_STENCILREF, uiLastTags);
 		return true;
 	}
 
@@ -263,10 +270,10 @@ namespace StencilTags {
 		return std::exchange(uiTaggedStages, 0);
 	}
 
-	// Returns the eligible geometry counted since the last call and resets the counts: tagged, and left untagged for
-	// lying beyond `fMaxDistance`. Geometry drawn in several separate runs of passes counts once per run.
+	// Returns the eligible geometry counted since the last call and resets the counts: tagged, tagged as toppers, and
+	// left untagged for lying beyond `fMaxDistance`. Geometry drawn in several separate runs of passes counts once per run.
 	GeometryCounts ConsumeGeometryCounts() {
-		return { std::exchange(uiTaggedGeometry, 0), std::exchange(uiDistantGeometry, 0) };
+		return { std::exchange(uiTaggedGeometry, 0), std::exchange(uiTopperGeometry, 0), std::exchange(uiDistantGeometry, 0) };
 	}
 
 	// Returns whether the stencil buffer of the given target holds tags from this frame's opaque stage.

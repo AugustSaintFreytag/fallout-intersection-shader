@@ -14,13 +14,7 @@ namespace Settings {
 		DEBUG_VERTEX_COLOR	= 5, // Draws the vertex colour at the ground point over tagged statics.
 		DEBUG_BLEND_WEIGHTS	= 6, // Draws the strongest blend weight at the ground point over tagged statics.
 		DEBUG_RAW_VERTEX_COLOR	= 7, // Draws the vertex colour at the ground point as written by the ground pass, unpacked.
-	};
-
-	// A base form by plugin name and form ID without the load order byte.
-	// Resolved once the game data is loaded.
-	struct FormEntry {
-		std::string	sPlugin;
-		uint32_t	uiFormID;
+		DEBUG_TOPPER_TAGS	= 8, // Tints every pixel tagged as a topper for static-to-static blending.
 	};
 
 	inline bool						bEnabled				= true;
@@ -28,7 +22,8 @@ namespace Settings {
 	inline float					fMaxDistance			= 4096.0f;	// Game units, ~58 m
 	inline float					fBlendRange				= 48.0f;	// Game units along the surface, ~70 cm
 	inline std::vector<uint8_t>		kTerrainBlendTypes;					// Base form type IDs
-	inline std::vector<FormEntry>	kTerrainBlendBlacklist;
+	inline std::vector<std::string>	kTerrainBlendBlacklist;				// Editor IDs of base forms
+	inline std::vector<std::string>	kStaticBlendToppers;				// Editor IDs of base forms
 	inline DebugMode				eDebugMode				= DEBUG_NONE;
 	inline bool						bProfile				= false;	// Logs the GPU time of each stage every few seconds.
 

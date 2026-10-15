@@ -26,6 +26,7 @@ namespace Dependencies {
 		HMODULE hLODFlickerFix	= GetModuleHandle("LODFlickerFix.dll");
 		HMODULE hDepthResolve	= GetModuleHandle("DepthResolve.dll");
 		HMODULE hVPT			= GetModuleHandle("VanillaPlusTerrain.dll");
+		HMODULE hJohnnyGuitar	= GetModuleHandle("johnnyguitar.dll");
 
 		if (!hShaderLoader)
 			return Fail("Fallout Shader Loader not found.\nIntersection Blend cannot be used without it and is disabled.");
@@ -46,6 +47,10 @@ namespace Dependencies {
 		// Depth math assumes the reversed depth buffer of LOD Flicker Fix.
 		if (!hLODFlickerFix)
 			return Fail("LOD Flicker Fix not found.\nIntersection Blend cannot be used without it and is disabled.");
+
+		// The terrain blend blacklist and the topper list take editor IDs. The game drops most of them at load.
+		if (!hJohnnyGuitar)
+			return Fail("JohnnyGuitar NVSE not found.\nIntersection Blend cannot be used without it and is disabled.");
 
 		if (!hDepthResolve)
 			return Fail("Depth Resolve not found.\nIntersection Blend cannot be used without it and is disabled.");

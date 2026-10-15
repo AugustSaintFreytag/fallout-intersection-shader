@@ -69,7 +69,7 @@ namespace OverlayPass {
 		if (bShadersReady && !DrawRedirect::IsReady())
 			_MESSAGE("Terrain overlay disabled: draw redirect not available");
 		bOverlayReady = bShadersReady && DrawRedirect::IsReady();
-		StencilTags::SetEnabled(bOverlayReady || Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS);
+		StencilTags::SetEnabled(bOverlayReady || Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS);
 		Profiler::Initialize();
 
 		pDebugVS = Dependencies::CreateVertexShader("IntersectionBlend\\DebugDepth.vso");
@@ -410,7 +410,7 @@ namespace OverlayPass {
 		return uiPasses;
 	}
 
-	// Draws the full-screen debug view for the current debug mode: depth bands, stencil tags or ground height.
+	// Draws the full-screen debug view for the current debug mode: depth bands, stencil tags, topper tags or ground height.
 	// The given texture is the scene depth, or the ground buffer for the ground height view.
 	static void DrawDebugView(IDirect3DDevice9* apDevice, const NiCamera* apCamera, IDirect3DBaseTexture9* apTexture) {
 		// Capture all device state and restore it afterwards. The game's render state cache then stays valid.
@@ -432,12 +432,13 @@ namespace OverlayPass {
 
 		apDevice->SetRenderState(D3DRS_ZENABLE, D3DZB_FALSE);
 		apDevice->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
-		if (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || IsAttributeView()) {
+		if (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS || IsAttributeView()) {
+			const uint32_t uiBit = Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS ? StencilTags::TOPPER_BIT : StencilTags::TERRAIN_BLEND_BIT;
 			apDevice->SetRenderState(D3DRS_STENCILENABLE, TRUE);
 			apDevice->SetRenderState(D3DRS_TWOSIDEDSTENCILMODE, FALSE);
 			apDevice->SetRenderState(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
-			apDevice->SetRenderState(D3DRS_STENCILREF, StencilTags::TERRAIN_BLEND_BIT);
-			apDevice->SetRenderState(D3DRS_STENCILMASK, StencilTags::TERRAIN_BLEND_BIT);
+			apDevice->SetRenderState(D3DRS_STENCILREF, uiBit);
+			apDevice->SetRenderState(D3DRS_STENCILMASK, uiBit);
 			apDevice->SetRenderState(D3DRS_STENCILWRITEMASK, 0);
 		}
 		else {
@@ -537,7 +538,7 @@ namespace OverlayPass {
 			pGroundTexture = GroundBuffer::Render(pDevice, apAccumulator->m_pkCamera, apTarget, apDepthTexture, bHeightView);
 
 		// Draw before the overlay. The overlay clears the tags it draws over.
-		if (bDebugReady && Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS && bTagged)
+		if (bDebugReady && (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS) && bTagged)
 			DrawDebugView(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
 		else if (bDebugReady && bAttributeView && bTagged && pGroundTexture)
 			DrawDebugView(pDevice, apAccumulator->m_pkCamera, GroundBuffer::GetPointTexture());
@@ -555,7 +556,7 @@ namespace OverlayPass {
 
 		StencilTags::Clear(pDevice);
 		const StencilTags::GeometryCounts kTagCounts = StencilTags::ConsumeGeometryCounts();
-		Profiler::RecordTags(kTagCounts.uiTagged, kTagCounts.uiDistant);
+		Profiler::RecordTags(kTagCounts.uiTagged, kTagCounts.uiToppers, kTagCounts.uiDistant);
 		Profiler::EndFrame();
 
 		if (uiLoggedFrames < 3) {

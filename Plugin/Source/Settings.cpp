@@ -70,28 +70,17 @@ namespace Settings {
 		return kTypes;
 	}
 
-	// Reads an INI section with one base form per line, written as `Plugin.esm:FormID`.
-	// Drops the load order byte of the form ID.
-	static std::vector<FormEntry> GetFormList(const char* apSection) {
+	// Reads an INI section with one editor ID per line.
+	static std::vector<std::string> GetEditorIDList(const char* apSection) {
 		std::vector<char> kBuffer(32767);
 		const DWORD uiLength = GetPrivateProfileSection(apSection, kBuffer.data(), static_cast<DWORD>(kBuffer.size()), INI_PATH);
 
-		std::vector<FormEntry> kEntries;
+		std::vector<std::string> kEntries;
 		for (const char* pLine = kBuffer.data(); pLine < kBuffer.data() + uiLength && *pLine; pLine += strlen(pLine) + 1) {
 			std::string sLine(pLine);
 			sLine = Trim(sLine.substr(0, sLine.find_first_of(";#=")));
-			if (sLine.empty())
-				continue;
-
-			const size_t uiSeparator = sLine.rfind(':');
-			char* pEnd = nullptr;
-			const uint32_t uiFormID = uiSeparator != std::string::npos ? strtoul(sLine.c_str() + uiSeparator + 1, &pEnd, 16) : 0;
-			if (uiSeparator == std::string::npos || uiSeparator == 0 || !pEnd || *pEnd) {
-				_MESSAGE("Settings: [%s] entry \"%s\" is not Plugin.esm:FormID, skipped", apSection, sLine.c_str());
-				continue;
-			}
-
-			kEntries.push_back({ Trim(sLine.substr(0, uiSeparator)), uiFormID & 0xFFFFFF });
+			if (!sLine.empty())
+				kEntries.push_back(sLine);
 		}
 		return kEntries;
 	}
@@ -103,12 +92,14 @@ namespace Settings {
 		fMaxDistance			= GetFloat("Blend", "fMaxDistance", fMaxDistance);
 		fBlendRange				= GetFloat("Blend", "fBlendRange", fBlendRange);
 		kTerrainBlendTypes		= ParseFormTypes(GetString("Selection", "sTerrainBlendTypes", "STAT"));
-		kTerrainBlendBlacklist	= GetFormList("TerrainBlendBlacklist");
+		kTerrainBlendBlacklist	= GetEditorIDList("TerrainBlendBlacklist");
+		kStaticBlendToppers		= GetEditorIDList("StaticBlendToppers");
 		eDebugMode				= static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
 		bProfile				= GetUInt("Debug", "bProfile", bProfile) != 0;
 
-		_MESSAGE("Settings: enabled %u, unrolled mapping %u, max distance %.1f, blend range %.1f, %u terrain blend types, %u blacklist entries, debug mode %u, profile %u",
-			bEnabled, bUnrolledMapping, fMaxDistance, fBlendRange, static_cast<uint32_t>(kTerrainBlendTypes.size()), static_cast<uint32_t>(kTerrainBlendBlacklist.size()), eDebugMode, bProfile);
+		_MESSAGE("Settings: enabled %u, unrolled mapping %u, max distance %.1f, blend range %.1f, %u terrain blend types, %u blacklist entries, %u toppers, debug mode %u, profile %u",
+			bEnabled, bUnrolledMapping, fMaxDistance, fBlendRange, static_cast<uint32_t>(kTerrainBlendTypes.size()), static_cast<uint32_t>(kTerrainBlendBlacklist.size()),
+			static_cast<uint32_t>(kStaticBlendToppers.size()), eDebugMode, bProfile);
 	}
 
 }
