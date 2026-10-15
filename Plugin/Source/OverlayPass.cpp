@@ -247,11 +247,12 @@ namespace OverlayPass {
 				kStates.Force(D3DRS_CULLMODE, D3DCULL_NONE);
 				kStates.Force(D3DRS_SCISSORTESTENABLE, FALSE);
 
-				DrawRedirect::ConsumeCount();
+				DrawRedirect::ConsumeCounts();
 				DrawRedirect::SetArmed(true);
 				const LARGE_INTEGER kReplayStart = GetCounter();
 				// Landscape blocks are only translated. Their model space is centred on the cell.
 				uiPasses = TerrainPasses::Replay(apTarget, nullptr, [apDevice, &kEye](const NiGeometry* apGeometry) {
+					DrawRedirect::BeginPass();
 					const NiBound* pBound = apGeometry->m_pWorldBound;
 					const NiPoint3& kTranslate = apGeometry->m_kWorld.m_Translate;
 					const float fBlock[2][4] = {
@@ -266,19 +267,20 @@ namespace OverlayPass {
 				});
 				DrawRedirect::SetArmed(false);
 				const double dReplayMilliseconds = GetMillisecondsSince(kReplayStart);
-				const uint32_t uiRedirected = DrawRedirect::ConsumeCount();
-				Profiler::RecordReplay(uiPasses, uiRedirected, dReplayMilliseconds);
+				const DrawRedirect::Counts kCounts = DrawRedirect::ConsumeCounts();
+				Profiler::RecordReplay(uiPasses, kCounts.uiDrawn, kCounts.uiSkipped, kCounts.uiForeign, dReplayMilliseconds);
 
 				static uint32_t uiLoggedGroundFrames = 0;
 				if (uiLoggedGroundFrames < 3) {
 					uiLoggedGroundFrames++;
-					_MESSAGE("Ground mode: %u landscape passes replayed, %u draws redirected", uiPasses, uiRedirected);
+					_MESSAGE("Ground mode: %u landscape passes replayed, %u triangles drawn, %u draws skipped, %u of them with another vertex buffer",
+						uiPasses, kCounts.uiDrawn, kCounts.uiSkipped, kCounts.uiForeign);
 				}
 			}
 			else {
 				const LARGE_INTEGER kReplayStart = GetCounter();
 				uiPasses = TerrainPasses::Replay(apTarget);
-				Profiler::RecordReplay(uiPasses, 0, GetMillisecondsSince(kReplayStart));
+				Profiler::RecordReplay(uiPasses, 0, 0, 0, GetMillisecondsSince(kReplayStart));
 			}
 		}
 
