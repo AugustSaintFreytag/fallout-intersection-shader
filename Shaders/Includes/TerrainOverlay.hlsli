@@ -308,3 +308,4 @@ void GetGroundBasis(float3 groundNormal, out float3 tangent, out float3 binormal
 float3 GetOverlayMaskColor() {
     return IsGroundMode() ? GetBlockColor(IBBlock.xy) : OverlayMaskColor;
 }
+

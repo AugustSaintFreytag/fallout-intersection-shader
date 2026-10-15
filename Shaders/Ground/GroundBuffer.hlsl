@@ -50,7 +50,8 @@ row_major float4x4 WorldToField : register(c5); // Eye-relative world position t
 row_major float4x4 FieldToWorld : register(c9); // Height field clip space to eye-relative world position
 float4 FieldParams : register(c13);             // x, y = height field texel size, z = maximum distance
 float4 ScreenParams : register(c14);            // x, y = screen texel size
-float4 GroundParams : register(c15);            // x = 1 in ground mode, y = blend range, z = 1 for unrolled mapping
+float4 GroundParams : register(c15);            // x = 1 in ground mode, y = blend range, z = 1 for unrolled mapping,
+                                                // w = 1 to write the raw attributes (debug mode 7)
 float4 EyePosition : register(c16);             // xyz = camera position in world space
 
 static const float NO_GROUND = 1.0e9f;
@@ -219,6 +220,13 @@ PS_OUTPUT main(VS_OUTPUT IN) {
         groundPoint += GetUnrollOffset(surface, surfaceNormal, groundNormal, height);
 
     FieldAttributes attributes = GetFieldAttributes(groundPoint);
+
+    // Debug mode 7: vertex colour and blend weight 7 as plain floats, without packing.
+    if (GroundParams.w > 0.5f) {
+        result.target0 = float4(groundPoint, PackUnorm2x12(groundNormal.xy * 0.5f + 0.5f));
+        result.target1 = float4(attributes.vertexColor, attributes.blend1.z);
+        return result;
+    }
 
     result.target0 = float4(groundPoint, PackUnorm2x12(groundNormal.xy * 0.5f + 0.5f));
     result.target1 = float4(

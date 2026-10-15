@@ -3,10 +3,8 @@
 // Height within which the visible surface touches the terrain and blends fully, in game units.
 static const float SelfHeight = 0.5f;
 
-// Surfaces tilted less than ~20 degrees against the terrain do not blend. Surfaces tilted more than ~45 degrees blend fully.
-// Values are 1 - cos(angle). Keeps flat statics on the ground, such as slabs and rubble, from being covered.
-static const float FlatSurfaceStart = 0.06f;
-static const float FlatSurfaceEnd = 0.29f;
+// Lower limit for the sine of the surface tilt against the terrain. Keeps the distance to the contact line finite.
+static const float MinTiltSine = 1e-3f;
 
 // Returns the opacity of a terrain overlay fragment drawn over a visible surface.
 //
@@ -23,6 +21,11 @@ static const float FlatSurfaceEnd = 0.29f;
 //
 // Both normals are normalized and in the same space. The surface normal can have either sign.
 // Parameters: x = blend range, y = max distance, z = max ray gap.
+//
+// The blend range is a distance along the surface, up from the contact line. For a surface tilted against the terrain
+// by an angle, that distance is the height over the sine of the angle. Vertical faces fade over the blend range in
+// height. Shallow faces get a band of the same width along the surface. Flat statics resting on the ground, such as
+// slabs, lie their thickness above it and nearly parallel. Their distance to a contact line is far beyond the range.
 float IntersectionBlendFactor(float height, float rayGap, float sceneDepth, bool sameSurface, float3 groundNormal, float3 surfaceNormal, float3 params) {
     float blendRange = params.x;
     float maxDistance = params.y;
@@ -40,9 +43,10 @@ float IntersectionBlendFactor(float height, float rayGap, float sceneDepth, bool
     if (height < 0.0f)
         return 0.0f; // The visible surface lies below the terrain there.
 
-    float blend = 1.0f - smoothstep(SelfHeight, blendRange, height);
-    blend *= smoothstep(FlatSurfaceStart, FlatSurfaceEnd, 1.0f - abs(dot(surfaceNormal, groundNormal)));
-    return blend * distanceFade;
+    float tiltCosine = dot(surfaceNormal, groundNormal);
+    float tiltSine = sqrt(saturate(1.0f - tiltCosine * tiltCosine));
+    float contactDistance = height / max(tiltSine, MinTiltSine);
+    return (1.0f - smoothstep(SelfHeight, blendRange, contactDistance)) * distanceFade;
 }
 
 // Size of a landscape block, a quarter of a cell. Blocks lie on a world-aligned grid.
@@ -54,23 +58,28 @@ static const float LandscapeBlockSize = 2048.0f;
 // Verified in RenderDoc capture 02.
 static const float TerrainUVScale = 256.0f;
 
-// Unrolled mapping fades in with the horizontal part of the surface normal, the sine of the surface tilt against the
-// terrain. Flat surfaces have no direction to unroll in and sample straight down.
-static const float UnrollStart = 0.1f;
-static const float UnrollEnd = 0.3f;
+// Lower limit for 1 + cos of the surface tilt in the unrolled mapping. Caps the offset at ~2.6 times the height,
+// for faces that overhang the ground.
+static const float MinUnrollDenominator = 0.25f;
 
 // Returns the unrolled mapping offset to add to the foot of the surface.
 //
 // On steep faces, every point of a column would sample the same spot under it. The texture would smear upwards.
-// The offset continues past the contact line by the height, under the static, as if the ground bent up onto it.
+// The offset continues past the contact line, under the static, as if the ground bent up onto it.
 // That ground is hidden. Nothing shows twice and the texture flows on in the same direction.
 // Takes the eye-relative surface position. The surface normal can have either sign.
+//
+// A surface point lies a distance d up the surface from the contact line. Its foot lies d * cos(tilt) from the contact
+// line, on the static's side. The ground point lies d past the contact line, so the texture keeps its scale onto
+// the surface. The offset from the foot is d * (1 - cos(tilt)), or the height * tan(tilt / 2). That is the height on
+// vertical faces and goes to 0 on flat ones.
 float3 GetUnrollOffset(float3 surface, float3 surfaceNormal, float3 groundNormal, float height) {
     float3 facingNormal = dot(surfaceNormal, surface) > 0.0f ? -surfaceNormal : surfaceNormal;
-    float3 outward = facingNormal - groundNormal * dot(facingNormal, groundNormal);
-    float outwardLength = length(outward);
-    float unroll = smoothstep(UnrollStart, UnrollEnd, outwardLength);
-    return -outward / max(outwardLength, 1e-4f) * max(height, 0.0f) * unroll;
+    float tiltCosine = dot(facingNormal, groundNormal);
+    float3 outward = facingNormal - groundNormal * tiltCosine;
+
+    // The outward part has the length sin(tilt), and tan(tilt / 2) = sin(tilt) / (1 + cos(tilt)).
+    return -outward * max(height, 0.0f) / max(1.0f + tiltCosine, MinUnrollDenominator);
 }
 
 // Returns the shorter of the forward and backward difference to the neighbouring pixels.

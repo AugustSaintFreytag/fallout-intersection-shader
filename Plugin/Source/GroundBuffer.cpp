@@ -394,7 +394,7 @@ namespace GroundBuffer {
 		};
 		const float fFieldParams[4]			= { 1.0f / FIELD_SIZE, 1.0f / FIELD_SIZE, Settings::fMaxDistance, 0.0f };
 		const float fTexelSize[4]			= { 1.0f / uiGroundWidth, 1.0f / uiGroundHeight, 0.0f, 0.0f };
-		const float fGroundParams[4]		= { abGroundMode ? 1.0f : 0.0f, Settings::fBlendRange, Settings::bUnrolledMapping ? 1.0f : 0.0f, 0.0f };
+		const float fGroundParams[4]		= { abGroundMode ? 1.0f : 0.0f, Settings::fBlendRange, Settings::bUnrolledMapping ? 1.0f : 0.0f, Settings::eDebugMode == Settings::DEBUG_RAW_VERTEX_COLOR ? 1.0f : 0.0f };
 		const float fEyePosition[4]			= { kEye.x, kEye.y, kEye.z, 0.0f };
 
 		apDevice->SetPixelShaderConstantF(0, fDepthParams, 1);

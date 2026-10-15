@@ -131,6 +131,12 @@ namespace OverlayPass {
 		return Settings::bGroundShading && DrawRedirect::IsReady() && Settings::eDebugMode != Settings::DEBUG_GROUND_HEIGHT;
 	}
 
+	// Returns whether the debug mode shows the ground mode attributes in place of the overlay.
+	static bool IsAttributeView() {
+		return Settings::eDebugMode == Settings::DEBUG_VERTEX_COLOR || Settings::eDebugMode == Settings::DEBUG_BLEND_WEIGHTS
+			|| Settings::eDebugMode == Settings::DEBUG_RAW_VERTEX_COLOR;
+	}
+
 	// Returns the lipping mode for `IBOverlayFlags.w`.
 	static float GetLippingMode(bool abGroundMode) {
 		if (abGroundMode)
@@ -293,7 +299,7 @@ namespace OverlayPass {
 
 		apDevice->SetRenderState(D3DRS_ZENABLE, D3DZB_FALSE);
 		apDevice->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
-		if (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS) {
+		if (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || IsAttributeView()) {
 			apDevice->SetRenderState(D3DRS_STENCILENABLE, TRUE);
 			apDevice->SetRenderState(D3DRS_TWOSIDEDSTENCILMODE, FALSE);
 			apDevice->SetRenderState(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
@@ -389,6 +395,7 @@ namespace OverlayPass {
 		D3DXMatrixMultiply(&kViewProjection, pRenderer->GetD3DView(), pRenderer->GetD3DProj());
 
 		const bool bGroundMode = IsGroundMode();
+		const bool bAttributeView = bGroundMode && IsAttributeView();
 
 		IDirect3DTexture9* pGroundTexture = nullptr;
 		if (bOverlay || Settings::eDebugMode == Settings::DEBUG_GROUND_HEIGHT)
@@ -397,9 +404,11 @@ namespace OverlayPass {
 		// Draw before the overlay. The overlay clears the tags it draws over.
 		if (bDebugReady && Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS && bTagged)
 			DrawDebugView(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
+		else if (bDebugReady && bAttributeView && bTagged && pGroundTexture)
+			DrawDebugView(pDevice, apAccumulator->m_pkCamera, GroundBuffer::GetPointTexture());
 
 		uint32_t uiPasses = 0;
-		if (bOverlay && pGroundTexture)
+		if (bOverlay && pGroundTexture && !bAttributeView)
 			uiPasses = RenderTerrainOverlay(pDevice, apAccumulator->m_pkCamera, apTarget, pGroundTexture, GroundBuffer::GetPointTexture(), kViewProjection, bGroundMode);
 		TerrainPasses::Clear();
 

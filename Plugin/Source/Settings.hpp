@@ -11,6 +11,9 @@ namespace Settings {
 		DEBUG_OVERLAY_MASK	= 2, // Draws the terrain overlay in a solid color at its blend opacity.
 		DEBUG_STENCIL_TAGS	= 3, // Tints every pixel tagged for terrain blending.
 		DEBUG_GROUND_HEIGHT	= 4, // Tints every surface by its height above the terrain under it. Reads the ground buffer.
+		DEBUG_VERTEX_COLOR	= 5, // Ground mode: draws the vertex colour at the ground point over tagged statics.
+		DEBUG_BLEND_WEIGHTS	= 6, // Ground mode: draws the strongest blend weight at the ground point over tagged statics.
+		DEBUG_RAW_VERTEX_COLOR	= 7, // Ground mode: draws the vertex colour at the ground point as written by the ground pass, unpacked.
 	};
 
 	// A base form by plugin name and form ID without the load order byte.
@@ -26,7 +29,7 @@ namespace Settings {
 	inline bool						bUnrolledMapping		= true;		// Off: lipping samples the terrain straight under the surface.
 	inline bool						bGroundShading			= false;	// Ground mode: shades from the landscape block under each static. Experimental.
 	inline float					fMaxDistance			= 4096.0f;	// Game units, ~58 m
-	inline float					fBlendRange				= 24.0f;	// Game units, ~35 cm
+	inline float					fBlendRange				= 48.0f;	// Game units along the surface, ~70 cm
 	inline float					fMaxRayGap				= 128.0f;	// Game units, ~1.8 m
 	inline std::vector<uint8_t>		kTerrainBlendTypes;					// Base form type IDs
 	inline std::vector<FormEntry>	kTerrainBlendBlacklist;
