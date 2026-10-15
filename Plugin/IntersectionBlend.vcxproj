@@ -92,7 +92,8 @@
       <Command>if not exist "$(ProjectDir)..\Build\Plugin\NVSE\Plugins" mkdir "$(ProjectDir)..\Build\Plugin\NVSE\Plugins"
 copy "$(TargetPath)" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetFileName)"
 copy "$(TargetDir)$(TargetName).pdb" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetName).pdb"
-copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlend.ini"</Command>
+copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlend.ini"
+copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlendForms.ini"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -135,7 +136,8 @@ copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plu
       <Command>if not exist "$(ProjectDir)..\Build\Plugin\NVSE\Plugins" mkdir "$(ProjectDir)..\Build\Plugin\NVSE\Plugins"
 copy "$(TargetPath)" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetFileName)"
 copy "$(TargetDir)$(TargetName).pdb" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetName).pdb"
-copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlend.ini"</Command>
+copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlend.ini"
+copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlendForms.ini"</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -180,6 +182,7 @@ copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plu
     <ClCompile Include="Source\Settings.cpp" />
     <ClCompile Include="Source\StencilTags.cpp" />
     <ClCompile Include="Source\TerrainPasses.cpp" />
+    <ClCompile Include="Source\TopperPasses.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Dependencies.hpp" />
@@ -192,6 +195,7 @@ copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plu
     <ClInclude Include="Source\Settings.hpp" />
     <ClInclude Include="Source\StencilTags.hpp" />
     <ClInclude Include="Source\TerrainPasses.hpp" />
+    <ClInclude Include="Source\TopperPasses.hpp" />
     <ClInclude Include="External\NVSE\nvse_version.h" />
     <ClInclude Include="External\NVSE\PluginAPI.h" />
     <ClInclude Include="External\Shared\Defines.hpp" />
@@ -360,6 +364,7 @@ copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plu
   <ItemGroup>
     <None Include="packages.config" />
     <None Include="IntersectionBlend.ini" />
+    <None Include="IntersectionBlendForms.ini" />
     <None Include="..\Shaders\Includes\TerrainOverlay.hlsli" />
     <None Include="..\Shaders\Terrain\VPT\TerrainTemplate.hlsl" />
     <None Include="..\Shaders\Terrain\Parallax\TerrainTemplate.hlsl" />

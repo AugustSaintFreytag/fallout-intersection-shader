@@ -6,10 +6,12 @@ namespace Dependencies {
 	static constexpr uint32_t		uiShaderLoaderVersion	= 131;
 
 	typedef void(__cdecl* RegisterPostResolveDepthCallbackFn)(PostResolveDepthCallback);
+	typedef void(__cdecl* ResolveSceneDepthFn)(BSShaderAccumulator*, BSRenderedTexture*);
 	typedef NiD3DVertexShader*(__cdecl* CreateVertexShaderFn)(const char*);
 	typedef NiD3DPixelShader*(__cdecl* CreatePixelShaderFn)(const char*);
 
 	static RegisterPostResolveDepthCallbackFn	pRegisterPostResolveDepthCallback	= nullptr;
+	static ResolveSceneDepthFn					pResolveSceneDepth					= nullptr;
 	static CreateVertexShaderFn					pCreateVertexShader					= nullptr;
 	static CreatePixelShaderFn					pCreatePixelShader					= nullptr;
 
@@ -59,12 +61,26 @@ namespace Dependencies {
 		if (!pRegisterPostResolveDepthCallback)
 			return Fail("Depth Resolve does not provide RegisterPostResolveDepthCallback.\nA Depth Resolve build with the post-resolve callback is required.\nIntersection Blend is disabled.");
 
-		_MESSAGE("Dependencies OK (Shader Loader %u, Vanilla Plus Terrain %s)", kInfo.version, hVPT ? "found" : "not found");
+		// Optional. Without it, toppers are not deferred.
+		pResolveSceneDepth = reinterpret_cast<ResolveSceneDepthFn>(GetProcAddress(hDepthResolve, "ResolveSceneDepth"));
+
+		_MESSAGE("Dependencies OK (Shader Loader %u, Vanilla Plus Terrain %s, Depth Resolve %s ResolveSceneDepth)", kInfo.version, hVPT ? "found" : "not found",
+			pResolveSceneDepth ? "with" : "without");
 		return true;
 	}
 
 	void RegisterPostResolveDepthCallback(PostResolveDepthCallback apCallback) {
 		pRegisterPostResolveDepthCallback(apCallback);
+	}
+
+	bool CanResolveSceneDepth() {
+		return pResolveSceneDepth != nullptr;
+	}
+
+	// Resolves the depth of the given render target into Depth Resolve's depth texture again.
+	void ResolveSceneDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget) {
+		if (pResolveSceneDepth)
+			pResolveSceneDepth(apAccumulator, apTarget);
 	}
 
 	// Loads a vertex shader from `Data\Shaders\Loose\` through Shader Loader.

@@ -22,10 +22,11 @@ namespace Settings {
 	inline float					fMaxDistance			= 4096.0f;	// Game units, ~58 m
 	inline float					fBlendRange				= 48.0f;	// Game units along the surface, ~70 cm
 	inline std::vector<uint8_t>		kTerrainBlendTypes;					// Base form type IDs
-	inline std::vector<std::string>	kTerrainBlendBlacklist;				// Editor IDs of base forms
-	inline std::vector<std::string>	kStaticBlendToppers;				// Editor IDs of base forms
+	inline std::vector<std::string>	kTerrainToStaticBlacklist;			// Editor IDs of base forms
+	inline std::vector<std::string>	kStaticToStaticWhitelist;			// Editor IDs of base forms, the toppers
 	inline DebugMode				eDebugMode				= DEBUG_NONE;
 	inline bool						bProfile				= false;	// Logs the GPU time of each stage every few seconds.
+	inline bool						bDeferToppers			= true;		// Off: toppers draw in the opaque stage.
 
 	void Load();
 

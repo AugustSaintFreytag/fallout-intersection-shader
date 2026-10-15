@@ -16,7 +16,7 @@ namespace Profiler {
 
 	static constexpr uint32_t	SET_COUNT			= 4;	// Frames in flight before a set is read again
 	static constexpr double		LOG_INTERVAL		= 5.0;	// Seconds
-	static constexpr const char*	STAGE_NAMES[STAGE_COUNT] = { "field", "ground", "overlay" };
+	static constexpr const char*	STAGE_NAMES[STAGE_COUNT] = { "toppers", "field", "ground", "overlay" };
 
 	// The queries of one frame.
 	struct QuerySet {

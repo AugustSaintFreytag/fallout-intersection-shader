@@ -9,6 +9,7 @@
 #include "Settings.hpp"
 #include "StencilTags.hpp"
 #include "TerrainPasses.hpp"
+#include "TopperPasses.hpp"
 
 #include "Bethesda/BSShaderAccumulator.hpp"
 #include "Gamebryo/NiCamera.hpp"
@@ -64,6 +65,7 @@ namespace OverlayPass {
 	// Call once the D3D device exists, at NVSE DeferredInit.
 	void Initialize() {
 		const bool bShadersReady = GroundShaders::Load();
+		TopperPasses::Initialize();
 		GroundBuffer::Initialize();
 		DrawRedirect::Initialize();
 		if (bShadersReady && !DrawRedirect::IsReady())
@@ -508,17 +510,24 @@ namespace OverlayPass {
 		bRendering = uiCallbacks != 0;
 	}
 
-	// Renders the ground buffer, the terrain overlay and the debug views for the frame, then clears the stencil tags.
+	// Draws the deferred toppers, then renders the ground buffer, the terrain overlay and the debug views for the frame.
+	// Clears the stencil tags at the end.
 	void __cdecl OnPostResolveDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture) {
 		uiFrameCallbacks++;
 
-		if (!Settings::bEnabled || !apAccumulator || !apAccumulator->m_pkCamera || !apDepthTexture) {
-			TerrainPasses::Clear();
-			return;
-		}
-
 		IDirect3DDevice9* pDevice = NiDX9Renderer::GetSingleton()->GetD3DDevice();
 		Profiler::BeginFrame(pDevice);
+
+		// Toppers left out of the opaque stage are drawn in any case.
+		const uint32_t uiTopperPasses = apAccumulator && apTarget ? TopperPasses::Replay(apAccumulator, apTarget) : 0;
+		TopperPasses::Clear();
+		Profiler::EndStage(Profiler::STAGE_TOPPERS);
+
+		if (!Settings::bEnabled || !apAccumulator || !apAccumulator->m_pkCamera || !apDepthTexture) {
+			TerrainPasses::Clear();
+			Profiler::EndFrame();
+			return;
+		}
 
 		// Without tags from this frame, the stencil buffer holds nothing for the overlay to test against.
 		const bool bTagged = StencilTags::HasTags(apTarget);
@@ -561,7 +570,8 @@ namespace OverlayPass {
 
 		if (uiLoggedFrames < 3) {
 			const NiFrustum& kFrustum = apAccumulator->m_pkCamera->m_kViewFrustum;
-			_MESSAGE("Post-resolve callback: target %p, depth %p, near %.2f, far %.2f, stencil tags %u, %u landscape passes replayed", apTarget, apDepthTexture, kFrustum.m_fNear, kFrustum.m_fFar, bTagged, uiPasses);
+			_MESSAGE("Post-resolve callback: target %p, depth %p, near %.2f, far %.2f, stencil tags %u, %u topper passes and %u landscape passes replayed",
+				apTarget, apDepthTexture, kFrustum.m_fNear, kFrustum.m_fFar, bTagged, uiTopperPasses, uiPasses);
 			uiLoggedFrames++;
 		}
 	}

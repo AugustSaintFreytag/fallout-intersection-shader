@@ -1,6 +1,7 @@
 #include "TerrainPasses.hpp"
 
 #include "StencilTags.hpp"
+#include "TopperPasses.hpp"
 
 #include "Bethesda/BSShaderManager.hpp"
 #include "Bethesda/BSShaderProperty.hpp"
@@ -35,15 +36,25 @@ namespace TerrainPasses {
 	static CallDetour					kRenderPassDetour;
 	static std::vector<RecordedPass>	kRecordedPasses;
 
-	// Records landscape passes and wraps every pass draw with stencil tagging.
+	// Records landscape passes, defers topper passes and wraps every other pass draw with stencil tagging.
 	static void __cdecl RenderPassHook(void* apRenderPass, uint32_t auiPassType, uint32_t auiArg2, uint32_t auiArg3, uint32_t auiArg4) {
 		if (auiPassType >= FIRST_LANDSCAPE_PASS && auiPassType <= LAST_LANDSCAPE_PASS)
 			kRecordedPasses.push_back({ apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4, BSShaderManager::GetCurrentRenderTarget() });
 
-		const bool bTagged = StencilTags::BeginPass(apRenderPass);
-		reinterpret_cast<RenderPassFn>(kRenderPassDetour.GetOverwrittenAddr())(apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4);
-		if (bTagged)
+		const uint32_t uiTags = StencilTags::BeginPass(apRenderPass);
+		if ((uiTags & StencilTags::TOPPER_BIT) && TopperPasses::Defer(apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4, uiTags)) {
 			StencilTags::EndPass();
+			return;
+		}
+
+		DrawPass(apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4);
+		if (uiTags)
+			StencilTags::EndPass();
+	}
+
+	// Draws a render pass with the per-pass draw function of the batch renderer, past the hook.
+	void DrawPass(void* apRenderPass, uint32_t auiPassType, uint32_t auiArg2, uint32_t auiArg3, uint32_t auiArg4) {
+		reinterpret_cast<RenderPassFn>(kRenderPassDetour.GetOverwrittenAddr())(apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4);
 	}
 
 	// Hooks the per-pass draw call of the batch renderer.
@@ -66,8 +77,6 @@ namespace TerrainPasses {
 	// Only passes accepted by the filter are drawn, if one is given. Calls the callback before each draw.
 	// Returns the number of passes drawn.
 	uint32_t Replay(const BSRenderedTexture* apTarget, const PassFilter& arFilter, const PassCallback& arBeforeDraw) {
-		auto pRenderPass = reinterpret_cast<RenderPassFn>(kRenderPassDetour.GetOverwrittenAddr());
-
 		uint32_t uiCount = 0;
 		for (const RecordedPass& rPass : kRecordedPasses) {
 			// Reflections draw the landscape into their own targets.
@@ -78,7 +87,7 @@ namespace TerrainPasses {
 			if (arBeforeDraw)
 				arBeforeDraw(GetGeometry(rPass), rPass.uiPassType);
 
-			pRenderPass(rPass.pRenderPass, rPass.uiPassType, rPass.uiArg2, rPass.uiArg3, rPass.uiArg4);
+			DrawPass(rPass.pRenderPass, rPass.uiPassType, rPass.uiArg2, rPass.uiArg3, rPass.uiArg4);
 			uiCount++;
 		}
 

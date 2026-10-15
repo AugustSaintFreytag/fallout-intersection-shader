@@ -1,0 +1,163 @@
+#include "TopperPasses.hpp"
+
+#include "Dependencies.hpp"
+#include "RenderStates.hpp"
+#include "StencilTags.hpp"
+#include "Settings.hpp"
+#include "TerrainPasses.hpp"
+
+#include "Bethesda/BSShaderManager.hpp"
+#include "Gamebryo/NiDX9Renderer.hpp"
+
+#include <algorithm>
+#include <vector>
+
+// Draws the toppers after the opaque stage instead of during it.
+//
+// The per-pass hook records topper passes in the opaque stage and skips their draws. The bases behind the toppers are
+// then fully drawn, and Depth Resolve's depth copy holds them without the toppers. The post-resolve callback draws the
+// toppers first and has Depth Resolve copy the depth again. The ground pass, AO and everything after them see the toppers.
+//
+// A pass inherits render states from the passes before it and from its pass group. `BSBatchRenderer` locks alpha test
+// and alpha to coverage for each pass group (GAME - 0xB9A120). The recorder keeps the states a pass starts with.
+// The replay sets them again before each pass. It forces the locked ones, so the pass cannot change them.
+// Each pass writes its stencil tags as in the opaque stage. Afterwards the replay ends the shader technique of the
+// last pass like `RenderBatches` does, and restores the states it set to their values from before the replay.
+//
+// Reference at the pass group loop of `BSBatchRenderer` (GAME - 0xB9A120).
+// Reference at `BSShaderAccumulator::RenderBatches` (GAME - 0xB63770), call at 0xB639C6.
+namespace TopperPasses {
+
+	// States a pass inherits and may change.
+	static constexpr D3DRENDERSTATETYPE kInheritedStates[] = {
+		D3DRS_ZENABLE, D3DRS_ZWRITEENABLE, D3DRS_ALPHAREF, D3DRS_ALPHAFUNC, D3DRS_ALPHABLENDENABLE,
+		D3DRS_SRCBLEND, D3DRS_DESTBLEND, D3DRS_BLENDOP, D3DRS_CULLMODE, D3DRS_COLORWRITEENABLE,
+	};
+
+	// States the pass group locks. Alpha to coverage is `D3DRS_ADAPTIVETESS_Y` on NVIDIA and `D3DRS_POINTSIZE` on AMD
+	// (GAME - 0xB98540).
+	static constexpr D3DRENDERSTATETYPE kLockedStates[] = { D3DRS_ALPHATESTENABLE, D3DRS_ADAPTIVETESS_Y, D3DRS_POINTSIZE };
+
+	static constexpr uint32_t TEXTURE_STAGE_COUNT = 16;
+
+	// Ends the technique of the current shader and pass type, and clears both (GAME - 0xB988E0). cdecl, no arguments.
+	// The per-pass draw function starts a technique when the shader or pass type changes (GAME - 0xB99390).
+	static constexpr uint32_t END_TECHNIQUE = 0xB988E0;
+
+	// A topper pass draw recorded for the replay, with the render states it started with.
+	struct RecordedPass {
+		void*						pRenderPass;
+		uint32_t					uiPassType;
+		uint32_t					uiArg2;
+		uint32_t					uiArg3;
+		uint32_t					uiArg4;
+		const BSRenderedTexture*	pTarget;
+		uint32_t					uiTags;
+		uint32_t					uiZFunc;
+		uint32_t					uiInherited[ARRAYSIZE(kInheritedStates)];
+		uint32_t					uiLocked[ARRAYSIZE(kLockedStates)];
+	};
+
+	static bool							bEnabled	= false;
+	static std::vector<RecordedPass>	kRecordedPasses;
+
+	// Enables deferral if Depth Resolve can resolve the depth again. Toppers are drawn in the opaque stage otherwise.
+	// Call at NVSE DeferredInit.
+	void Initialize() {
+		bEnabled = Settings::bDeferToppers && Dependencies::CanResolveSceneDepth();
+		kRecordedPasses.reserve(256);
+		if (!Settings::bDeferToppers)
+			_MESSAGE("Toppers are drawn in the opaque stage: bDeferToppers is off");
+		else if (!bEnabled)
+			_MESSAGE("Toppers are drawn in the opaque stage: Depth Resolve does not provide ResolveSceneDepth");
+	}
+
+	// Sets `D3DRS_ZFUNC` on the device and in the render state cache.
+	// LOD Flicker Fix remaps every value set through `NiDX9RenderState`. The recorded values are remapped already.
+	static void SetZFunc(NiDX9RenderState* apRenderState, IDirect3DDevice9* apDevice, uint32_t auiValue) {
+		apDevice->SetRenderState(D3DRS_ZFUNC, auiValue);
+		apRenderState->m_akRenderStateSettings[D3DRS_ZFUNC].m_uiCurrValue = auiValue;
+	}
+
+	// Records a topper pass for the replay instead of drawing it. Returns false if it has to be drawn now.
+	bool Defer(void* apRenderPass, uint32_t auiPassType, uint32_t auiArg2, uint32_t auiArg3, uint32_t auiArg4, uint32_t auiTags) {
+		if (!bEnabled)
+			return false;
+
+		const NiDX9RenderState* pRenderState = NiDX9Renderer::GetSingleton()->m_pkRenderState;
+		RecordedPass kPass = { apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4, BSShaderManager::GetCurrentRenderTarget(), auiTags,
+			pRenderState->m_akRenderStateSettings[D3DRS_ZFUNC].m_uiCurrValue };
+		for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++)
+			kPass.uiInherited[i] = pRenderState->m_akRenderStateSettings[kInheritedStates[i]].m_uiCurrValue;
+		for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++)
+			kPass.uiLocked[i] = pRenderState->m_akRenderStateSettings[kLockedStates[i]].m_uiCurrValue;
+
+		kRecordedPasses.push_back(kPass);
+		return true;
+	}
+
+	// Draws the topper passes deferred from the opaque stage of the given target, then resolves the scene depth again.
+	// Returns the number of passes drawn.
+	uint32_t Replay(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget) {
+		const auto itFirst = std::find_if(kRecordedPasses.begin(), kRecordedPasses.end(), [apTarget](const RecordedPass& arPass) { return arPass.pTarget == apTarget; });
+		if (itFirst == kRecordedPasses.end())
+			return 0;
+
+		NiDX9RenderState* pRenderState = NiDX9Renderer::GetSingleton()->m_pkRenderState;
+		IDirect3DDevice9* pDevice = NiDX9Renderer::GetSingleton()->GetD3DDevice();
+		RenderStates::SyncTextureStages(pRenderState, pDevice, TEXTURE_STAGE_COUNT);
+
+		// The state the opaque stage left, restored after the replay.
+		const uint32_t uiSavedZFunc = pRenderState->m_akRenderStateSettings[D3DRS_ZFUNC].m_uiCurrValue;
+		uint32_t uiSavedInherited[ARRAYSIZE(kInheritedStates)];
+		for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++)
+			uiSavedInherited[i] = pRenderState->m_akRenderStateSettings[kInheritedStates[i]].m_uiCurrValue;
+
+		uint32_t uiCount = 0;
+		{
+			// Stencil tags as in the opaque stage (`StencilTags`).
+			ForcedRenderStates kStates(pRenderState);
+			kStates.Force(D3DRS_STENCILENABLE, TRUE);
+			kStates.Force(D3DRS_TWOSIDEDSTENCILMODE, FALSE);
+			kStates.Force(D3DRS_STENCILFUNC, D3DCMP_ALWAYS);
+			kStates.Force(D3DRS_STENCILPASS, D3DSTENCILOP_REPLACE);
+			kStates.Force(D3DRS_STENCILFAIL, D3DSTENCILOP_KEEP);
+			kStates.Force(D3DRS_STENCILZFAIL, D3DSTENCILOP_KEEP);
+			kStates.Force(D3DRS_STENCILWRITEMASK, StencilTags::TAG_BITS);
+			kStates.Force(D3DRS_STENCILREF, 0);
+			for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++)
+				kStates.Force(kLockedStates[i], itFirst->uiLocked[i]);
+
+			for (auto it = itFirst; it != kRecordedPasses.end(); ++it) {
+				if (it->pTarget != apTarget)
+					continue;
+
+				for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++)
+					pRenderState->SetRenderState(kInheritedStates[i], it->uiInherited[i], 0, false);
+				for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++)
+					kStates.Update(kLockedStates[i], it->uiLocked[i]);
+				kStates.Update(D3DRS_STENCILREF, it->uiTags);
+				SetZFunc(pRenderState, pDevice, it->uiZFunc);
+
+				TerrainPasses::DrawPass(it->pRenderPass, it->uiPassType, it->uiArg2, it->uiArg3, it->uiArg4);
+				uiCount++;
+			}
+		}
+
+		// After the group locks are released, as in `RenderBatches`. The technique restores the states it changed.
+		CdeclCall(END_TECHNIQUE);
+		for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++)
+			pRenderState->SetRenderState(kInheritedStates[i], uiSavedInherited[i], 0, false);
+		SetZFunc(pRenderState, pDevice, uiSavedZFunc);
+
+		// After the forced states are restored. The resolve sets states of its own.
+		Dependencies::ResolveSceneDepth(apAccumulator, apTarget);
+		return uiCount;
+	}
+
+	// Drops all recorded passes. Called once per frame before rendering, and after the replay.
+	void Clear() {
+		kRecordedPasses.clear();
+	}
+
+}

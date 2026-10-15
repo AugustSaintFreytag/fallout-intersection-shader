@@ -4,7 +4,8 @@
 
 namespace Settings {
 
-	static constexpr const char* INI_PATH = "Data\\NVSE\\Plugins\\IntersectionBlend.ini";
+	static constexpr const char* INI_PATH		= "Data\\NVSE\\Plugins\\IntersectionBlend.ini";
+	static constexpr const char* FORMS_INI_PATH	= "Data\\NVSE\\Plugins\\IntersectionBlendForms.ini";
 
 	struct FormTypeName {
 		const char*	pName;
@@ -70,10 +71,10 @@ namespace Settings {
 		return kTypes;
 	}
 
-	// Reads an INI section with one editor ID per line.
+	// Reads a section of `IntersectionBlendForms.ini` with one editor ID per line.
 	static std::vector<std::string> GetEditorIDList(const char* apSection) {
 		std::vector<char> kBuffer(32767);
-		const DWORD uiLength = GetPrivateProfileSection(apSection, kBuffer.data(), static_cast<DWORD>(kBuffer.size()), INI_PATH);
+		const DWORD uiLength = GetPrivateProfileSection(apSection, kBuffer.data(), static_cast<DWORD>(kBuffer.size()), FORMS_INI_PATH);
 
 		std::vector<std::string> kEntries;
 		for (const char* pLine = kBuffer.data(); pLine < kBuffer.data() + uiLength && *pLine; pLine += strlen(pLine) + 1) {
@@ -85,21 +86,22 @@ namespace Settings {
 		return kEntries;
 	}
 
-	// Reads `IntersectionBlend.ini`. Missing keys keep their defaults.
+	// Reads `IntersectionBlend.ini` and the form lists in `IntersectionBlendForms.ini`. Missing keys keep their defaults.
 	void Load() {
 		bEnabled				= GetUInt("Main", "bEnabled", bEnabled) != 0;
 		bUnrolledMapping		= GetUInt("Blend", "bUnrolledMapping", bUnrolledMapping) != 0;
 		fMaxDistance			= GetFloat("Blend", "fMaxDistance", fMaxDistance);
 		fBlendRange				= GetFloat("Blend", "fBlendRange", fBlendRange);
 		kTerrainBlendTypes		= ParseFormTypes(GetString("Selection", "sTerrainBlendTypes", "STAT"));
-		kTerrainBlendBlacklist	= GetEditorIDList("TerrainBlendBlacklist");
-		kStaticBlendToppers		= GetEditorIDList("StaticBlendToppers");
+		kTerrainToStaticBlacklist	= GetEditorIDList("TerrainToStaticBlacklist");
+		kStaticToStaticWhitelist	= GetEditorIDList("StaticToStaticWhitelist");
 		eDebugMode				= static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
 		bProfile				= GetUInt("Debug", "bProfile", bProfile) != 0;
+		bDeferToppers			= GetUInt("Debug", "bDeferToppers", bDeferToppers) != 0;
 
 		_MESSAGE("Settings: enabled %u, unrolled mapping %u, max distance %.1f, blend range %.1f, %u terrain blend types, %u blacklist entries, %u toppers, debug mode %u, profile %u",
-			bEnabled, bUnrolledMapping, fMaxDistance, fBlendRange, static_cast<uint32_t>(kTerrainBlendTypes.size()), static_cast<uint32_t>(kTerrainBlendBlacklist.size()),
-			static_cast<uint32_t>(kStaticBlendToppers.size()), eDebugMode, bProfile);
+			bEnabled, bUnrolledMapping, fMaxDistance, fBlendRange, static_cast<uint32_t>(kTerrainBlendTypes.size()), static_cast<uint32_t>(kTerrainToStaticBlacklist.size()),
+			static_cast<uint32_t>(kStaticToStaticWhitelist.size()), eDebugMode, bProfile);
 	}
 
 }

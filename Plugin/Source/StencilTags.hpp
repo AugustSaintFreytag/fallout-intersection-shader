@@ -15,7 +15,7 @@ namespace StencilTags {
 
 	void SetEnabled(bool abEnabled);
 
-	bool BeginPass(const void* apRenderPass);
+	uint32_t BeginPass(const void* apRenderPass);
 	void EndPass();
 
 	uint32_t ConsumeTaggedStageCount();

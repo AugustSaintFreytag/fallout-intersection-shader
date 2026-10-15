@@ -149,12 +149,12 @@ namespace StencilTags {
 		for (uint8_t ucType : Settings::kTerrainBlendTypes)
 			bTypeEligible[ucType] = true;
 
-		kBlacklist	= ResolveEditorIDs(Settings::kTerrainBlendBlacklist, "Terrain blend blacklist");
-		kToppers	= ResolveEditorIDs(Settings::kStaticBlendToppers, "Static blend toppers");
+		kBlacklist	= ResolveEditorIDs(Settings::kTerrainToStaticBlacklist, "Terrain-to-static blacklist");
+		kToppers	= ResolveEditorIDs(Settings::kStaticToStaticWhitelist, "Static-to-static whitelist");
 
 		_MESSAGE("Terrain blend selection: %u form types, %u of %u blacklisted base forms found", static_cast<uint32_t>(Settings::kTerrainBlendTypes.size()),
-			static_cast<uint32_t>(kBlacklist.size()), static_cast<uint32_t>(Settings::kTerrainBlendBlacklist.size()));
-		_MESSAGE("Static blend selection: %u of %u toppers found", static_cast<uint32_t>(kToppers.size()), static_cast<uint32_t>(Settings::kStaticBlendToppers.size()));
+			static_cast<uint32_t>(kBlacklist.size()), static_cast<uint32_t>(Settings::kTerrainToStaticBlacklist.size()));
+		_MESSAGE("Static blend selection: %u of %u toppers found", static_cast<uint32_t>(kToppers.size()), static_cast<uint32_t>(Settings::kStaticToStaticWhitelist.size()));
 	}
 
 	static void BeginTagging(const BSShaderAccumulator* apAccumulator) {
@@ -231,10 +231,11 @@ namespace StencilTags {
 	}
 
 	// Sets the tag reference to the tag bits of the geometry of the given render pass, if it gets any.
-	// Call before every batch-rendered pass draw. Returns true if `EndPass` has to be called after the draw.
-	bool BeginPass(const void* apRenderPass) {
+	// Call before every batch-rendered pass draw. Returns the tag bits. `EndPass` has to be called after the draw
+	// if they are not 0.
+	uint32_t BeginPass(const void* apRenderPass) {
 		if (!pTaggingStates || !apRenderPass)
-			return false;
+			return 0;
 
 		const NiGeometry* pGeometry = static_cast<const BSShaderProperty::RenderPass*>(apRenderPass)->pGeometry;
 		if (pGeometry != pLastGeometry) {
@@ -251,11 +252,9 @@ namespace StencilTags {
 			}
 		}
 
-		if (!uiLastTags)
-			return false;
-
-		pTaggingStates->Update(D3DRS_STENCILREF, uiLastTags);
-		return true;
+		if (uiLastTags)
+			pTaggingStates->Update(D3DRS_STENCILREF, uiLastTags);
+		return uiLastTags;
 	}
 
 	// Resets the tag reference after a tagged pass.
