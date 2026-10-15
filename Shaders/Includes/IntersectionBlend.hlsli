@@ -6,38 +6,20 @@ static const float SelfHeight = 0.5f;
 // Lower limit for the sine of the surface tilt against the terrain. Keeps the distance to the contact line finite.
 static const float MinTiltSine = 1e-3f;
 
-// Returns the opacity of a terrain overlay fragment drawn over a visible surface.
+// Returns the opacity of the terrain overlay over a visible surface.
 //
 // The height is the height of the visible surface above the terrain right under it, along the terrain normal.
-// It comes from the ground buffer.
-//
-// The ray gap is the distance between the visible surface and the terrain fragment along the view ray. The fragment
-// supplies the texture blend weights. A fragment far from the surface would show the wrong ground, such as a cliff
-// texture from behind a crest. The gap is a hard cutoff. The first fragment drawn on a pixel clears its stencil tag.
-// A faint far fragment must not take the place of a near one.
-//
-// The same-surface flag is set if the resolved depth at this pixel is the terrain fragment itself. The overlay only
-// draws on samples of tagged statics. Such a pixel is an MSAA edge pixel where a static meets the ground. It blends fully.
-//
 // Both normals are normalized and in the same space. The surface normal can have either sign.
-// Parameters: x = blend range, y = max distance, z = max ray gap.
 //
 // The blend range is a distance along the surface, up from the contact line. For a surface tilted against the terrain
 // by an angle, that distance is the height over the sine of the angle. Vertical faces fade over the blend range in
 // height. Shallow faces get a band of the same width along the surface. Flat statics resting on the ground, such as
 // slabs, lie their thickness above it and nearly parallel. Their distance to a contact line is far beyond the range.
-float IntersectionBlendFactor(float height, float rayGap, float sceneDepth, bool sameSurface, float3 groundNormal, float3 surfaceNormal, float3 params) {
-    float blendRange = params.x;
-    float maxDistance = params.y;
-    float maxRayGap = params.z;
-
-    if (rayGap > maxRayGap)
-        return 0.0f;
-
+float IntersectionBlendFactor(float height, float sceneDepth, float3 groundNormal, float3 surfaceNormal, float blendRange, float maxDistance) {
     float distanceFade = 1.0f - smoothstep(maxDistance * 0.8f, maxDistance, sceneDepth);
 
     // Contact line. The overlay only draws on samples of tagged statics. This is never terrain over terrain.
-    if (sameSurface || abs(height) < SelfHeight)
+    if (abs(height) < SelfHeight)
         return distanceFade;
 
     if (height < 0.0f)

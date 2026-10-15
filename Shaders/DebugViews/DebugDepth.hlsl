@@ -4,7 +4,7 @@
 // 3: stencil tags. The plugin draws this view with a stencil test. Every drawn pixel is tagged.
 // 4: ground buffer, bound to s0 in place of the depth. Shows the height of every surface above the terrain under it.
 //    Green on the ground, a line every 8 units above it, red below it, blue where the height field has no terrain.
-// 5, 6: ground mode attributes, bound to s0. Drawn with the stencil test of mode 3, in place of the overlay.
+// 5-7: ground buffer attributes, bound to s0. Drawn with the stencil test of mode 3, in place of the overlay.
 //    5 shows the vertex colour at the ground point. 6 shows the strongest blend weight there as a colour per texture
 //    slot, darker where the weights sum to less than 1. 7 shows the vertex colour as the ground pass wrote it,
 //    unpacked.
