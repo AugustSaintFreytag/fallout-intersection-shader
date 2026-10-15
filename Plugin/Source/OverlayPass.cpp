@@ -166,6 +166,79 @@ namespace OverlayPass {
 		return fDepth - pBound->m_fRadius <= afMaxDepth;
 	}
 
+	// Returns the screen rectangle that holds every pixel whose ground point can lie in the given landscape block.
+	//
+	// The box spans the block's square and its bound's full height, widened by the reach of the lip. Its corners are
+	// projected with the scene's view projection, which takes eye-relative positions. Box edges that cross the near
+	// plane contribute the point where they cross it, in place of the corner behind it. An empty rectangle means
+	// the box lies behind the camera.
+	static RECT GetBlockScissor(const NiGeometry* apGeometry, const NiPoint3& arEye, const D3DXMATRIX& arViewProjection, float afNear, const D3DVIEWPORT9& arViewport, float afMargin) {
+		const RECT kFull = { static_cast<LONG>(arViewport.X), static_cast<LONG>(arViewport.Y), static_cast<LONG>(arViewport.X + arViewport.Width), static_cast<LONG>(arViewport.Y + arViewport.Height) };
+		const NiBound* pBound = apGeometry->m_pWorldBound;
+		if (!pBound)
+			return kFull;
+
+		const float fCenterX = (std::floor(pBound->m_kCenter.x / LANDSCAPE_BLOCK_SIZE) + 0.5f) * LANDSCAPE_BLOCK_SIZE;
+		const float fCenterY = (std::floor(pBound->m_kCenter.y / LANDSCAPE_BLOCK_SIZE) + 0.5f) * LANDSCAPE_BLOCK_SIZE;
+		const float fHalfSize = LANDSCAPE_BLOCK_SIZE * 0.5f + afMargin;
+		const float fHalfHeight = pBound->m_fRadius + afMargin;
+
+		// Corner i has the high x, y and z side for bits 1, 2 and 4.
+		D3DXVECTOR4 kCorners[8];
+		for (uint32_t i = 0; i < 8; i++) {
+			const D3DXVECTOR4 kPosition(
+				fCenterX + ((i & 1) ? fHalfSize : -fHalfSize) - arEye.x,
+				fCenterY + ((i & 2) ? fHalfSize : -fHalfSize) - arEye.y,
+				pBound->m_kCenter.z + ((i & 4) ? fHalfHeight : -fHalfHeight) - arEye.z,
+				1.0f);
+			D3DXVec4Transform(&kCorners[i], &kPosition, &arViewProjection);
+		}
+
+		float fMinX = FLT_MAX, fMinY = FLT_MAX, fMaxX = -FLT_MAX, fMaxY = -FLT_MAX;
+		const auto AddPoint = [&](const D3DXVECTOR4& arClip) {
+			const float fX = arClip.x / arClip.w;
+			const float fY = arClip.y / arClip.w;
+			fMinX = std::min(fMinX, fX);
+			fMaxX = std::max(fMaxX, fX);
+			fMinY = std::min(fMinY, fY);
+			fMaxY = std::max(fMaxY, fY);
+		};
+
+		bool bAny = false;
+		for (uint32_t i = 0; i < 8; i++) {
+			if (kCorners[i].w >= afNear) {
+				AddPoint(kCorners[i]);
+				bAny = true;
+			}
+			for (uint32_t uiBit = 1; uiBit < 8; uiBit <<= 1) {
+				if (i & uiBit)
+					continue;
+				const D3DXVECTOR4& kA = kCorners[i];
+				const D3DXVECTOR4& kB = kCorners[i | uiBit];
+				if ((kA.w >= afNear) == (kB.w >= afNear))
+					continue;
+				const float fT = (afNear - kA.w) / (kB.w - kA.w);
+				AddPoint(kA + (kB - kA) * fT);
+				bAny = true;
+			}
+		}
+		if (!bAny)
+			return { kFull.left, kFull.top, kFull.left, kFull.top };
+
+		// Clip y points up, window rows go down. One pixel of slack on each side.
+		const auto ToColumn = [&](float afX) { return arViewport.X + (afX * 0.5f + 0.5f) * arViewport.Width; };
+		const auto ToRow = [&](float afY) { return arViewport.Y + (0.5f - afY * 0.5f) * arViewport.Height; };
+		const auto Clamp = [](float afValue, LONG aiLow, LONG aiHigh) {
+			return static_cast<LONG>(std::clamp(afValue, static_cast<float>(aiLow), static_cast<float>(aiHigh)));
+		};
+		return {
+			Clamp(std::floor(ToColumn(fMinX)) - 1.0f, kFull.left, kFull.right),
+			Clamp(std::floor(ToRow(fMaxY)) - 1.0f, kFull.top, kFull.bottom),
+			Clamp(std::ceil(ToColumn(fMaxX)) + 1.0f, kFull.left, kFull.right),
+			Clamp(std::ceil(ToRow(fMinY)) + 1.0f, kFull.top, kFull.bottom),
+		};
+	}
+
 	// Returns the lipping mode for `IBOverlayFlags.w`.
 	static float GetLippingMode(bool abGroundMode) {
 		if (abGroundMode)
@@ -269,15 +342,28 @@ namespace OverlayPass {
 			if (abGroundMode) {
 				// Every pass draws a full-screen triangle instead of its block's mesh, through `DrawRedirect`.
 				// Each pixel is shaded by the pass of the block its ground point lies in. The shader identifies the block by c92.
+				// The scissor limits each triangle to the screen rectangle of its block (`GetBlockScissor`).
 				kStates.Force(D3DRS_CULLMODE, D3DCULL_NONE);
-				kStates.Force(D3DRS_SCISSORTESTENABLE, FALSE);
+				kStates.Force(D3DRS_SCISSORTESTENABLE, TRUE);
+
+				// The game's render state cache does not hold the scissor rectangle. Restore it on the device.
+				RECT kSavedScissor;
+				apDevice->GetScissorRect(&kSavedScissor);
+				const float fNear = apCamera->m_kViewFrustum.m_fNear;
+				const float fMargin = Settings::fBlendRange * LIP_REACH;
+				const double dScreenArea = static_cast<double>(kViewport.Width) * kViewport.Height;
+				double dScissoredScreens = 0.0;
 
 				DrawRedirect::ConsumeCounts();
 				DrawRedirect::SetArmed(true);
 				const LARGE_INTEGER kReplayStart = GetCounter();
 				// Landscape blocks are only translated. Their model space is centred on the cell.
-				uiPasses = TerrainPasses::Replay(apTarget, kInRange, [apDevice, &kEye](const NiGeometry* apGeometry) {
+				uiPasses = TerrainPasses::Replay(apTarget, kInRange, [&](const NiGeometry* apGeometry) {
 					DrawRedirect::BeginPass();
+					const RECT kScissor = GetBlockScissor(apGeometry, kEye, arViewProjection, fNear, kViewport, fMargin);
+					apDevice->SetScissorRect(&kScissor);
+					dScissoredScreens += static_cast<double>(kScissor.right - kScissor.left) * (kScissor.bottom - kScissor.top) / dScreenArea;
+
 					const NiBound* pBound = apGeometry->m_pWorldBound;
 					const NiPoint3& kTranslate = apGeometry->m_kWorld.m_Translate;
 					const float fBlock[2][4] = {
@@ -291,9 +377,10 @@ namespace OverlayPass {
 					apDevice->SetPixelShaderConstantF(BLOCK_CONSTANT_REGISTER, fBlock[0], 2);
 				});
 				DrawRedirect::SetArmed(false);
+				apDevice->SetScissorRect(&kSavedScissor);
 				const double dReplayMilliseconds = GetMillisecondsSince(kReplayStart);
 				const DrawRedirect::Counts kCounts = DrawRedirect::ConsumeCounts();
-				Profiler::RecordReplay(uiPasses, kCounts.uiDrawn, kCounts.uiSkipped, kCounts.uiForeign, dReplayMilliseconds);
+				Profiler::RecordReplay(uiPasses, kCounts.uiDrawn, kCounts.uiSkipped, kCounts.uiForeign, dScissoredScreens, dReplayMilliseconds);
 
 				static uint32_t uiLoggedGroundFrames = 0;
 				if (uiLoggedGroundFrames < 3) {
@@ -305,7 +392,7 @@ namespace OverlayPass {
 			else {
 				const LARGE_INTEGER kReplayStart = GetCounter();
 				uiPasses = TerrainPasses::Replay(apTarget, kInRange);
-				Profiler::RecordReplay(uiPasses, 0, 0, 0, GetMillisecondsSince(kReplayStart));
+				Profiler::RecordReplay(uiPasses, 0, 0, 0, 0.0, GetMillisecondsSince(kReplayStart));
 			}
 		}
 
