@@ -8,6 +8,7 @@
 //    5 shows the vertex colour at the ground point. 6 shows the strongest blend weight there as a colour per texture
 //    slot, darker where the weights sum to less than 1. 7 shows the vertex colour as the ground pass wrote it,
 //    unpacked.
+// 8: topper tags. Drawn with a stencil test on the topper bit. Every drawn pixel is a topper.
 
 #include "../Includes/Depth.hlsli"
 #include "../Includes/Packing.hlsli"
@@ -49,6 +50,7 @@ static const float DebugModeGroundHeight = 4.0f;
 static const float DebugModeVertexColor = 5.0f;
 static const float DebugModeBlendWeights = 6.0f;
 static const float DebugModeRawVertexColor = 7.0f;
+static const float DebugModeTopperTags = 8.0f;
 static const float GroundBandSpacing = 8.0f;
 
 float4 GroundHeightView(float4 ground, float maxDistance) {
@@ -105,6 +107,8 @@ float4 main(VS_OUTPUT IN) : COLOR0 {
         return AttributeView(tex2D(DepthBuffer, IN.uv), BlendParams.z == DebugModeVertexColor);
     if (BlendParams.z == DebugModeStencilTags)
         return float4(0.0f, 1.0f, 1.0f, 0.5f);
+    if (BlendParams.z == DebugModeTopperTags)
+        return float4(1.0f, 0.5f, 0.0f, 0.5f);
     if (BlendParams.z == DebugModeGroundHeight)
         return GroundHeightView(tex2D(DepthBuffer, IN.uv), BlendParams.x);
 
