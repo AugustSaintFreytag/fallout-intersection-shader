@@ -132,42 +132,28 @@ PS_OUTPUT main(PS_INPUT IN) {
         return OUT;
     }
 
-    // In the overlay pass, shade the terrain under the visible surface instead of this fragment (`GetOverlaySample`).
+    // In the overlay pass, shade the ground under the visible surface instead of this fragment (`GetGroundSample`).
+    // Texture gradients are taken before the branch. Derivatives are not available inside dynamic flow control.
     float2 uv = IN.uv.xy;
     float3 lPosition = IN.lPosition.xyz;
     float4 blend0 = IN.blend_0;
     float4 blend1 = IN.blend_1;
-    OverlayRay overlayRay = GetOverlayRay(IN.lPosition.xyz, IN.viewPosition.xyz, IN.projectionPosition.w, IN.uv.xy);
-    float2 dx = overlayRay.uvDx;
-    float2 dy = overlayRay.uvDy;
+    float2 dx = ddx(IN.uv.xy);
+    float2 dy = ddy(IN.uv.xy);
     float overlayAlpha = 1.0f;
-    float overlayDistanceScale = 1.0f;
     float3 basisTangent = IN.tangent.xyz;
     float3 basisBinormal = IN.binormal.xyz;
     float3 basisNormal = IN.normal.xyz;
     [branch] if (IsOverlayPass()) {
-        [branch] if (IsGroundMode()) {
-            GroundSample ground = GetGroundSample(IN.vpos);
-            overlayAlpha = ground.alpha;
-            uv = ground.uv;
-            dx = ground.uvDx;
-            dy = ground.uvDy;
-            lPosition = ground.position;
-            blend0 = ground.blend0;
-            blend1 = ground.blend1;
-            GetGroundBasis(ground.groundNormal, basisTangent, basisBinormal, basisNormal);
-        }
-        else {
-            OverlaySample overlay = GetOverlaySample(IN.vpos, overlayRay);
-            clip(overlay.alpha - 1.0f / 255.0f);
-            overlayAlpha = overlay.alpha;
-            uv += overlay.uvOffset;
-            lPosition += overlay.positionOffset;
-            dx *= overlay.distanceScale;
-            dy *= overlay.distanceScale;
-            overlayDistanceScale = overlay.distanceScale;
-            RebaseOnGround(basisTangent, basisBinormal, basisNormal, overlay.groundNormal);
-        }
+        GroundSample ground = GetGroundSample(IN.vpos);
+        overlayAlpha = ground.alpha;
+        uv = ground.uv;
+        dx = ground.uvDx;
+        dy = ground.uvDy;
+        lPosition = ground.position;
+        blend0 = ground.blend0;
+        blend1 = ground.blend1;
+        GetGroundBasis(ground.groundNormal, basisTangent, basisBinormal, basisNormal);
     }
 
     int texCount = TEX_COUNT; // Macro.
@@ -211,7 +197,7 @@ PS_OUTPUT main(PS_INPUT IN) {
     
     // Per pixel fog.
     float4 fog;
-    float3 fogPos = GetFogPosition(IN.projectionPosition, lPosition, overlayDistanceScale);
+    float3 fogPos = GetFogPosition(IN.projectionPosition, lPosition);
     float fogStrength = 1 - saturate((FogParam.x - length(fogPos)) / FogParam.y);
     fog.rgb = FogColor.rgb;
     fog.a = pow(fogStrength, FogParam.z);
@@ -220,7 +206,7 @@ PS_OUTPUT main(PS_INPUT IN) {
     finalColor = lerp(finalColor, fog.rgb, fog.a); // Apply fog.
 
     if (IsOverlayPass() && IsOverlayMaskDebug())
-        finalColor = GetOverlayMaskColor();
+        finalColor = GetBlockColor(IBBlock.xy);
 
     OUT.color_0.a = overlayAlpha;
     OUT.color_0.rgb = finalColor;

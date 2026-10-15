@@ -48,9 +48,9 @@ Add-Shader 'vs_3_0' 'Ground\GroundQuad.hlsl' "$pluginOut\GroundQuad.vso" @()
 # Terrain pixel shaders SLS2092-SLS2146: 7 texture counts x (no point lights, 6, 12, 24 point lights).
 # File number = 2092 + (texture count - 1) * 8 + light variant * 2, as in Vanilla Plus Terrain.
 $terrainVariants = @(
-    @{ Key = 'vpt';                Name = 'Vanilla Plus Terrain';         Source = 'Terrain\VPT\TerrainTemplate.hlsl';      Defines = @();                              Parallax = $false }
-    @{ Key = 'parallax';           Name = 'Parallax Shaders';             Source = 'Terrain\Parallax\TerrainTemplate.hlsl'; Defines = @();                              Parallax = $true }
-    @{ Key = 'parallax-optimized'; Name = 'Parallax Shaders (Optimized)'; Source = 'Terrain\Parallax\TerrainTemplate.hlsl'; Defines = @('MAX_STEPS=8', 'MAX_DISTANCE=1024'); Parallax = $true }
+    @{ Key = 'vpt';                Name = 'Vanilla Plus Terrain';         Source = 'Terrain\VPT\TerrainTemplate.hlsl';      Defines = @() }
+    @{ Key = 'parallax';           Name = 'Parallax Shaders';             Source = 'Terrain\Parallax\TerrainTemplate.hlsl'; Defines = @() }
+    @{ Key = 'parallax-optimized'; Name = 'Parallax Shaders (Optimized)'; Source = 'Terrain\Parallax\TerrainTemplate.hlsl'; Defines = @('MAX_STEPS=8', 'MAX_DISTANCE=1024') }
 )
 $pointLights = @($null, 6, 12, 24)
 
@@ -65,10 +65,7 @@ foreach ($terrain in $terrainVariants) {
             if ($pointLights[$lightVariant]) {
                 $defines += "NUM_PT_LIGHTS=$($pointLights[$lightVariant])"
             }
-            # With 6 and 7 textures, the Parallax shaders with the overlay modes exceed the 32 temporary registers of ps_3_0
-            # when fxc flattens branches. Preferring flow control fits them, at ~3% more instruction slots.
-            $flags = if ($terrain.Parallax -and $textures -ge 6) { @('/Gfp') } else { @() }
-            Add-Shader 'ps_3_0' $terrain.Source "Build\Terrain\$($terrain.Name)\Shaders\Loose\SLS$number.pso" $defines $flags
+            Add-Shader 'ps_3_0' $terrain.Source "Build\Terrain\$($terrain.Name)\Shaders\Loose\SLS$number.pso" $defines
         }
     }
 }

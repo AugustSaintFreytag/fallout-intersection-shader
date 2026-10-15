@@ -1,8 +1,7 @@
 // Ground buffer: for every screen pixel, what the terrain overlay needs to know about the ground under the visible surface.
 //
-// Reads the scene depth copy of Depth Resolve and the height field. Ground mode also reads the attribute fields.
-// Writes two R32G32B32A32F targets, bound to s14 and s15 in the terrain shaders. Their layout depends on the mode
-// (`PS_OUTPUT`).
+// Reads the scene depth copy of Depth Resolve, the height field and the attribute fields.
+// Writes two R32G32B32A32F targets, bound to s14 and s15 in the terrain shaders (`PS_OUTPUT`).
 //
 // The overlay reads these buffers instead of the scene depth. The terrain shaders keep their sampler layout.
 
@@ -50,8 +49,8 @@ row_major float4x4 WorldToField : register(c5); // Eye-relative world position t
 row_major float4x4 FieldToWorld : register(c9); // Height field clip space to eye-relative world position
 float4 FieldParams : register(c13);             // x, y = height field texel size, z = maximum distance
 float4 ScreenParams : register(c14);            // x, y = screen texel size
-float4 GroundParams : register(c15);            // x = 1 in ground mode, y = blend range, z = 1 for unrolled mapping,
-                                                // w = 1 to write the raw attributes (debug mode 7)
+float4 GroundParams : register(c15);            // x = 1 for the height layout (debug mode 4), y = blend range,
+                                                // z = 1 for unrolled mapping, w = 1 for the raw attributes (debug mode 7)
 float4 EyePosition : register(c16);             // xyz = camera position in world space
 
 static const float NO_GROUND = 1.0e9f;
@@ -145,33 +144,31 @@ FieldAttributes GetFieldAttributes(float3 groundPoint) {
     return result;
 }
 
-// Ground buffer targets in one of two layouts.
-// Pixels without terrain under them or beyond the maximum distance get `NO_GROUND` in COLOR0.g in the first layout.
-// They get zero in both targets in the second.
-//
-// Lipping modes 0-2, the overlay replays the terrain behind each static:
-//   COLOR0 = linear view depth of the visible surface, height of the surface above the terrain under it along the
-//            terrain normal, terrain normal x and y (z is positive)
-//   COLOR1 = xyz: eye-relative foot of the surface on the terrain, w = 1 (unused by the overlay)
-//
-// Ground mode, the overlay shades every pixel from these targets alone (`GetGroundSample`):
+// Ground buffer targets. Pixels without terrain under them or beyond the maximum distance get zero in both targets.
+// The overlay shades every pixel from these targets alone (`GetGroundSample`):
 //   COLOR0 = xyz: eye-relative ground point that shades the surface (its foot, unrolled if enabled),
 //            w: terrain normal x and y, as 2 x 12 bits of x * 0.5 + 0.5
 //   COLOR1 = 3 x 8 bits per channel: x = blend weights 0-2, y = blend weights 3-5, z = blend weight 6 and vertex
 //            colour r, g, w = vertex colour b, overlay opacity, 0
+//
+// Height layout, for debug mode 4 only. The overlay does not run with it. Pixels without terrain under them get
+// `NO_GROUND` in COLOR0.g:
+//   COLOR0 = linear view depth of the visible surface, height of the surface above the terrain under it along the
+//            terrain normal, terrain normal x and y (z is positive)
+//   COLOR1 = 0
 struct PS_OUTPUT {
     float4 target0 : COLOR0;
     float4 target1 : COLOR1;
 };
 
 PS_OUTPUT main(VS_OUTPUT IN) {
-    bool groundMode = GroundParams.x > 0.5f;
+    bool heightLayout = GroundParams.x > 0.5f;
 
     float sceneDepth;
     float3 surface = GetSurface(IN.uv, sceneDepth);
 
     PS_OUTPUT result;
-    result.target0 = groundMode ? 0.0f : float4(sceneDepth, NO_GROUND, 0.0f, 0.0f);
+    result.target0 = heightLayout ? float4(sceneDepth, NO_GROUND, 0.0f, 0.0f) : 0.0f;
     result.target1 = 0.0f;
     if (sceneDepth > FieldParams.z)
         return result;
@@ -199,9 +196,8 @@ PS_OUTPUT main(VS_OUTPUT IN) {
     float height = (surface.z - groundZ) * groundNormal.z;
     float3 foot = surface - groundNormal * height;
 
-    if (!groundMode) {
+    if (heightLayout) {
         result.target0 = float4(sceneDepth, height, groundNormal.xy);
-        result.target1 = float4(foot, 1.0f);
         return result;
     }
 
@@ -211,9 +207,7 @@ PS_OUTPUT main(VS_OUTPUT IN) {
     float3 surfaceDy = GetShorterDifference(surface, GetSurface(IN.uv + float2(0.0f, screenTexel.y)), GetSurface(IN.uv - float2(0.0f, screenTexel.y)));
     float3 surfaceNormal = normalize(cross(surfaceDx, surfaceDy));
 
-    // No ray gap applies. The overlay only draws on tagged samples. The ground point is never terrain behind the surface.
-    float3 params = float3(GroundParams.y, FieldParams.z, NO_GROUND);
-    float alpha = IntersectionBlendFactor(height, 0.0f, sceneDepth, false, groundNormal, surfaceNormal, params);
+    float alpha = IntersectionBlendFactor(height, sceneDepth, groundNormal, surfaceNormal, GroundParams.y, FieldParams.z);
 
     float3 groundPoint = foot;
     if (GroundParams.z > 0.5f)

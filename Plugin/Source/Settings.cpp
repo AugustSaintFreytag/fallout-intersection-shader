@@ -99,20 +99,16 @@ namespace Settings {
 	// Reads `IntersectionBlend.ini`. Missing keys keep their defaults.
 	void Load() {
 		bEnabled				= GetUInt("Main", "bEnabled", bEnabled) != 0;
-		bStencilTags			= GetUInt("Main", "bStencilTags", bStencilTags) != 0;
-		bLipping				= GetUInt("Blend", "bLipping", bLipping) != 0;
 		bUnrolledMapping		= GetUInt("Blend", "bUnrolledMapping", bUnrolledMapping) != 0;
-		bGroundShading			= GetUInt("Blend", "bGroundShading", bGroundShading) != 0;
 		fMaxDistance			= GetFloat("Blend", "fMaxDistance", fMaxDistance);
 		fBlendRange				= GetFloat("Blend", "fBlendRange", fBlendRange);
-		fMaxRayGap				= GetFloat("Blend", "fMaxRayGap", fMaxRayGap);
 		kTerrainBlendTypes		= ParseFormTypes(GetString("Selection", "sTerrainBlendTypes", "STAT"));
 		kTerrainBlendBlacklist	= GetFormList("TerrainBlendBlacklist");
 		eDebugMode				= static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
+		bProfile				= GetUInt("Debug", "bProfile", bProfile) != 0;
 
-		_MESSAGE("Settings: stencil tags %u, lipping %u, unrolled mapping %u, ground shading %u", bStencilTags, bLipping, bUnrolledMapping, bGroundShading);
-		_MESSAGE("Settings: enabled %u, max distance %.1f, blend range %.1f, max ray gap %.1f, %u terrain blend types, %u blacklist entries, debug mode %u",
-			bEnabled, fMaxDistance, fBlendRange, fMaxRayGap, static_cast<uint32_t>(kTerrainBlendTypes.size()), static_cast<uint32_t>(kTerrainBlendBlacklist.size()), eDebugMode);
+		_MESSAGE("Settings: enabled %u, unrolled mapping %u, max distance %.1f, blend range %.1f, %u terrain blend types, %u blacklist entries, debug mode %u, profile %u",
+			bEnabled, bUnrolledMapping, fMaxDistance, fBlendRange, static_cast<uint32_t>(kTerrainBlendTypes.size()), static_cast<uint32_t>(kTerrainBlendBlacklist.size()), eDebugMode, bProfile);
 	}
 
 }

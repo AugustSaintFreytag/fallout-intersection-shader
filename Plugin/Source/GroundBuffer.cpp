@@ -1,6 +1,7 @@
 #include "GroundBuffer.hpp"
 
 #include "Dependencies.hpp"
+#include "Profiler.hpp"
 #include "RenderStates.hpp"
 #include "Settings.hpp"
 #include "TerrainPasses.hpp"
@@ -300,9 +301,7 @@ namespace GroundBuffer {
 		const float fFieldFlags[4] = { FIELD_MAGIC, 0.0f, 0.0f, 0.0f };
 		apDevice->SetPixelShaderConstantF(FIELD_CONSTANT_REGISTER, fFieldFlags, 1);
 
-		// Depth Resolve's RESZ resolve binds the depth texture to stage 0 behind the game's texture cache.
-		for (uint32_t i = 0; i < TERRAIN_SAMPLER_COUNT; i++)
-			pRenderState->SetTexture(i, nullptr);
+		RenderStates::SyncTextureStages(pRenderState, apDevice, TERRAIN_SAMPLER_COUNT);
 
 		uint32_t uiDrawn = 0;
 		{
@@ -367,7 +366,7 @@ namespace GroundBuffer {
 	}
 
 	// Renders the ground buffer from the scene depth and the height field.
-	static void DrawGround(IDirect3DDevice9* apDevice, const NiCamera* apCamera, const D3DXMATRIX& arView, const D3DXMATRIX& arProjection, IDirect3DBaseTexture9* apDepthTexture, bool abGroundMode) {
+	static void DrawGround(IDirect3DDevice9* apDevice, const NiCamera* apCamera, const D3DXMATRIX& arView, const D3DXMATRIX& arProjection, IDirect3DBaseTexture9* apDepthTexture, bool abHeightLayout) {
 		IDirect3DSurface9* pSavedTarget = nullptr;
 		IDirect3DSurface9* pSavedDepth = nullptr;
 		apDevice->GetRenderTarget(0, &pSavedTarget);
@@ -394,7 +393,7 @@ namespace GroundBuffer {
 		};
 		const float fFieldParams[4]			= { 1.0f / FIELD_SIZE, 1.0f / FIELD_SIZE, Settings::fMaxDistance, 0.0f };
 		const float fTexelSize[4]			= { 1.0f / uiGroundWidth, 1.0f / uiGroundHeight, 0.0f, 0.0f };
-		const float fGroundParams[4]		= { abGroundMode ? 1.0f : 0.0f, Settings::fBlendRange, Settings::bUnrolledMapping ? 1.0f : 0.0f, Settings::eDebugMode == Settings::DEBUG_RAW_VERTEX_COLOR ? 1.0f : 0.0f };
+		const float fGroundParams[4]		= { abHeightLayout ? 1.0f : 0.0f, Settings::fBlendRange, Settings::bUnrolledMapping ? 1.0f : 0.0f, Settings::eDebugMode == Settings::DEBUG_RAW_VERTEX_COLOR ? 1.0f : 0.0f };
 		const float fEyePosition[4]			= { kEye.x, kEye.y, kEye.z, 0.0f };
 
 		apDevice->SetPixelShaderConstantF(0, fDepthParams, 1);
@@ -480,9 +479,9 @@ namespace GroundBuffer {
 	}
 
 	// Updates the height field from the passes recorded into the given target and renders the ground buffer.
-	// Uses the ground mode layout if requested. Runs while the target is bound.
+	// Uses the height layout for debug mode 4 if requested. Runs while the target is bound.
 	// Returns the first ground buffer target, or null if it is unavailable.
-	IDirect3DTexture9* Render(IDirect3DDevice9* apDevice, const NiCamera* apCamera, const BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture, bool abGroundMode) {
+	IDirect3DTexture9* Render(IDirect3DDevice9* apDevice, const NiCamera* apCamera, const BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture, bool abHeightLayout) {
 		if (!bReady || !apCamera || !apDepthTexture)
 			return nullptr;
 
@@ -502,7 +501,9 @@ namespace GroundBuffer {
 		const D3DXMATRIX kProjection = *pRenderer->GetD3DProj();
 
 		UpdateField(apDevice, apCamera, apTarget);
-		DrawGround(apDevice, apCamera, kView, kProjection, apDepthTexture, abGroundMode);
+		Profiler::EndStage(Profiler::STAGE_FIELD);
+		DrawGround(apDevice, apCamera, kView, kProjection, apDepthTexture, abHeightLayout);
+		Profiler::EndStage(Profiler::STAGE_GROUND);
 		return pGroundTexture;
 	}
 
