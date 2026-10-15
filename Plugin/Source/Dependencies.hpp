@@ -7,17 +7,19 @@ class BSRenderedTexture;
 class NiD3DPixelShader;
 class NiD3DVertexShader;
 
-// Exported by our patched Depth Resolve (patches/depth-resolve-post-resolve-callback.patch).
-// Called right after the pre-water depth resolve, while the scene render target is still bound.
+// A callback of the patched Depth Resolve, called right after the pre-water depth resolve.
+// The scene render target is still bound.
+//
+// Reference at "Plugin/Patches/depth-resolve-post-resolve-callback.patch".
 typedef void(__cdecl* PostResolveDepthCallback)(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture);
 
 namespace Dependencies {
-	// Shows a message box and returns false if a hard dependency is missing.
+
 	bool Check(const NVSEInterface* apNVSE);
 
 	void RegisterPostResolveDepthCallback(PostResolveDepthCallback apCallback);
 
-	// Loads from Data\Shaders\Loose\ through Shader Loader.
 	NiD3DVertexShader*	CreateVertexShader(const char* apFilename);
 	NiD3DPixelShader*	CreatePixelShader(const char* apFilename);
+
 }

@@ -1,10 +1,10 @@
-# Compiles all shaders in parallel (fxc is single-threaded, so one process per shader).
+# Compiles all shaders in parallel, one fxc process per shader. fxc is single-threaded.
 #   Build\Plugin\Shaders\Loose\IntersectionBlend      plugin shaders
 #   Build\Terrain\<variant>\Shaders\Loose      terrain pixel shaders with the overlay mode, one set per terrain shader mod
 #
 # Usage: pwsh Shaders\compile.ps1 [-Variant all|vpt|parallax|parallax-optimized] [-Force]
 # Shaders are skipped when their output is newer than every file under Shaders\. -Force rebuilds them all.
-# Set the FXC environment variable to use a specific fxc.exe; otherwise the newest Windows SDK one is used.
+# The FXC environment variable selects a specific fxc.exe. Default is the newest one from the Windows SDK.
 
 param(
     [ValidateSet('all', 'vpt', 'parallax', 'parallax-optimized')]
@@ -28,25 +28,29 @@ if (-not $fxc -or -not (Test-Path $fxc)) {
 
 $jobs = [System.Collections.Generic.List[object]]::new()
 
-function Add-Shader([string]$ShaderProfile, [string]$Source, [string]$Output, [string[]]$Defines) {
+function Add-Shader([string]$ShaderProfile, [string]$Source, [string]$Output, [string[]]$Defines, [string[]]$Flags = @()) {
     $jobs.Add([pscustomobject]@{
         Profile = $ShaderProfile
         Source  = Join-Path $shaders $Source
         Output  = Join-Path $root $Output
         Defines = $Defines
+        Flags   = $Flags
     })
 }
 
 $pluginOut = 'Build\Plugin\Shaders\Loose\IntersectionBlend'
 Add-Shader 'vs_3_0' 'DebugViews\DebugDepth.hlsl' "$pluginOut\DebugDepth.vso" @('VS')
 Add-Shader 'ps_3_0' 'DebugViews\DebugDepth.hlsl' "$pluginOut\DebugDepth.pso" @('PS')
+Add-Shader 'vs_3_0' 'Ground\GroundBuffer.hlsl' "$pluginOut\GroundBuffer.vso" @('VS')
+Add-Shader 'ps_3_0' 'Ground\GroundBuffer.hlsl' "$pluginOut\GroundBuffer.pso" @('PS')
+Add-Shader 'vs_3_0' 'Ground\GroundQuad.hlsl' "$pluginOut\GroundQuad.vso" @()
 
 # Terrain pixel shaders SLS2092-SLS2146: 7 texture counts x (no point lights, 6, 12, 24 point lights).
 # File number = 2092 + (texture count - 1) * 8 + light variant * 2, as in Vanilla Plus Terrain.
 $terrainVariants = @(
-    @{ Key = 'vpt';                Name = 'Vanilla Plus Terrain';         Source = 'Terrain\VPT\TerrainTemplate.hlsl';      Defines = @() }
-    @{ Key = 'parallax';           Name = 'Parallax Shaders';             Source = 'Terrain\Parallax\TerrainTemplate.hlsl'; Defines = @() }
-    @{ Key = 'parallax-optimized'; Name = 'Parallax Shaders (Optimized)'; Source = 'Terrain\Parallax\TerrainTemplate.hlsl'; Defines = @('MAX_STEPS=8', 'MAX_DISTANCE=1024') }
+    @{ Key = 'vpt';                Name = 'Vanilla Plus Terrain';         Source = 'Terrain\VPT\TerrainTemplate.hlsl';      Defines = @();                              Parallax = $false }
+    @{ Key = 'parallax';           Name = 'Parallax Shaders';             Source = 'Terrain\Parallax\TerrainTemplate.hlsl'; Defines = @();                              Parallax = $true }
+    @{ Key = 'parallax-optimized'; Name = 'Parallax Shaders (Optimized)'; Source = 'Terrain\Parallax\TerrainTemplate.hlsl'; Defines = @('MAX_STEPS=8', 'MAX_DISTANCE=1024'); Parallax = $true }
 )
 $pointLights = @($null, 6, 12, 24)
 
@@ -61,7 +65,10 @@ foreach ($terrain in $terrainVariants) {
             if ($pointLights[$lightVariant]) {
                 $defines += "NUM_PT_LIGHTS=$($pointLights[$lightVariant])"
             }
-            Add-Shader 'ps_3_0' $terrain.Source "Build\Terrain\$($terrain.Name)\Shaders\Loose\SLS$number.pso" $defines
+            # With 6 and 7 textures, the Parallax shaders with the overlay modes exceed the 32 temporary registers of ps_3_0
+            # when fxc flattens branches. Preferring flow control fits them, at ~3% more instruction slots.
+            $flags = if ($terrain.Parallax -and $textures -ge 6) { @('/Gfp') } else { @() }
+            Add-Shader 'ps_3_0' $terrain.Source "Build\Terrain\$($terrain.Name)\Shaders\Loose\SLS$number.pso" $defines $flags
         }
     }
 }
@@ -71,7 +78,7 @@ if ($missing.Count -gt 0) {
     throw "Shader sources not found: $($missing -join ', ')"
 }
 
-# Every shader includes shared files, so any change under Shaders\ invalidates all outputs.
+# Every shader includes shared files. Any change under Shaders\ invalidates all outputs.
 $newestSource = (Get-ChildItem $shaders -Recurse -Include *.hlsl, *.hlsli | Measure-Object LastWriteTimeUtc -Maximum).Maximum
 $pending = @($jobs | Where-Object { $Force -or -not (Test-Path $_.Output) -or (Get-Item $_.Output).LastWriteTimeUtc -lt $newestSource })
 
@@ -88,7 +95,7 @@ Write-Host "Compiling $($pending.Count) of $($jobs.Count) shaders with $fxc"
 $timer = [System.Diagnostics.Stopwatch]::StartNew()
 
 $results = $pending | ForEach-Object -ThrottleLimit ([Environment]::ProcessorCount) -Parallel {
-    $arguments = @('/nologo', '/T', $_.Profile, '/E', 'main') + ($_.Defines | ForEach-Object { "/D$_" }) + @('/Fo', $_.Output, $_.Source)
+    $arguments = @('/nologo', '/T', $_.Profile, '/E', 'main') + $_.Flags + ($_.Defines | ForEach-Object { "/D$_" }) + @('/Fo', $_.Output, $_.Source)
     $log = & $using:fxc @arguments 2>&1 | Out-String
     [pscustomobject]@{ Output = $_.Output; ExitCode = $LASTEXITCODE; Log = $log }
 }

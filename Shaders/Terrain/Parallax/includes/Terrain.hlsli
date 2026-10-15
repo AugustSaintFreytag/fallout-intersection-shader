@@ -5,7 +5,8 @@
     #include "Pointlights.hlsli"
 #endif
 
-// dx, dy: texture coordinate gradients. Explicit, because the terrain overlay shifts the coordinates per pixel.
+// Blends the diffuse maps by their weights and tints the result with the vertex colour.
+// Samples with explicit texture coordinate gradients. The terrain overlay shifts the coordinates per pixel.
 float3 blendDiffuseMaps(float3 vertexColor, float2 uv, float2 dx, float2 dy, int texCount, sampler2D tex[7], float blends[7]) {
     float3 color = float3(0, 0, 0);
     [unroll]

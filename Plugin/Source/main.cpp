@@ -21,13 +21,13 @@ static PluginHandle				uiPluginHandle	= 0;
 static void MessageHandler(NVSEMessagingInterface::Message* apMessage) {
 	switch (apMessage->type) {
 		case NVSEMessagingInterface::kMessage_DeferredInit:
-			// After every plugin's load, so the hook chains to LOD Flicker Fix's.
+			// Runs after every plugin has loaded. The render state hook then chains to the hook of LOD Flicker Fix.
 			RenderStates::InstallHook();
 			StencilTags::LoadSelection();
 			OverlayPass::Initialize();
 			break;
 		case NVSEMessagingInterface::kMessage_MainGameLoop:
-			// Runs before the frame is rendered. Drops passes of a frame whose depth callback never came.
+			// Runs before the frame is rendered. Drops passes of a frame that got no depth callback.
 			OverlayPass::OnMainLoop();
 			TerrainPasses::Clear();
 			break;

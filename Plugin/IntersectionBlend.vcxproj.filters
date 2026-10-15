@@ -147,6 +147,12 @@
     <ClCompile Include="Source\Dependencies.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Source\DrawRedirect.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
+    <ClCompile Include="Source\GroundBuffer.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
     <ClCompile Include="Source\OverlayPass.cpp">
       <Filter>Source</Filter>
     </ClCompile>
@@ -165,6 +171,12 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Source\Dependencies.hpp">
+      <Filter>Source</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\DrawRedirect.hpp">
+      <Filter>Source</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\GroundBuffer.hpp">
       <Filter>Source</Filter>
     </ClInclude>
     <ClInclude Include="Source\OverlayPass.hpp">

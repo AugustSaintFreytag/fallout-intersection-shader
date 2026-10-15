@@ -1,6 +1,7 @@
 #include "Dependencies.hpp"
 
 namespace Dependencies {
+
 	static constexpr const char*	PLUGIN_TITLE			= "Intersection Blend";
 	static constexpr uint32_t		uiShaderLoaderVersion	= 131;
 
@@ -18,6 +19,8 @@ namespace Dependencies {
 		return false;
 	}
 
+	// Checks that every hard dependency is loaded and resolves their exports.
+	// Shows a message box and returns false if one is missing or outdated.
 	bool Check(const NVSEInterface* apNVSE) {
 		HMODULE hShaderLoader	= GetModuleHandle("Fallout Shader Loader.dll");
 		HMODULE hLODFlickerFix	= GetModuleHandle("LODFlickerFix.dll");
@@ -40,7 +43,7 @@ namespace Dependencies {
 		if (!pCreateVertexShader || !pCreatePixelShader)
 			return Fail("Fallout Shader Loader does not export its shader creation functions.\nIntersection Blend is disabled.");
 
-		// Our depth math assumes the reversed depth buffer LOD Flicker Fix sets up.
+		// Depth math assumes the reversed depth buffer of LOD Flicker Fix.
 		if (!hLODFlickerFix)
 			return Fail("LOD Flicker Fix not found.\nIntersection Blend cannot be used without it and is disabled.");
 
@@ -59,11 +62,14 @@ namespace Dependencies {
 		pRegisterPostResolveDepthCallback(apCallback);
 	}
 
+	// Loads a vertex shader from `Data\Shaders\Loose\` through Shader Loader.
 	NiD3DVertexShader* CreateVertexShader(const char* apFilename) {
 		return pCreateVertexShader(apFilename);
 	}
 
+	// Loads a pixel shader from `Data\Shaders\Loose\` through Shader Loader.
 	NiD3DPixelShader* CreatePixelShader(const char* apFilename) {
 		return pCreatePixelShader(apFilename);
 	}
+
 }

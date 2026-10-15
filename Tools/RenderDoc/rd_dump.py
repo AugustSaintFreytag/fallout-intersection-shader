@@ -1,5 +1,5 @@
 # Runs inside qrenderdoc (embedded Python 3.8): qrenderdoc.exe --python rd_dump.py
-# Dumps every action of the capture with the pipeline state we care about to JSON lines.
+# Dumps every action of the capture with the relevant pipeline state to JSON lines.
 import os, sys, json, traceback
 import renderdoc as rd
 
