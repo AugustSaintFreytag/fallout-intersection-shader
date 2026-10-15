@@ -3,6 +3,7 @@
 #include "Dependencies.hpp"
 #include "DrawRedirect.hpp"
 #include "GroundBuffer.hpp"
+#include "GroundShaders.hpp"
 #include "Profiler.hpp"
 #include "RenderStates.hpp"
 #include "Settings.hpp"
@@ -21,20 +22,18 @@
 #include <cmath>
 #include <unordered_map>
 #include <utility>
-#include <vector>
 
 // Draws the terrain overlay between Depth Resolve's depth copy and the post-depth effects such as AO.
 //
 // The landscape passes recorded in the opaque stage are drawn again, without depth test and with alpha blending.
-// Each pass draws a full-screen triangle in place of its block's mesh (`DrawRedirect`), limited to the block's screen
-// rectangle. The terrain pixel shaders switch into overlay mode for this replay. They shade every tagged pixel whose
-// ground point lies in their block from the ground buffer, with an opacity that falls off up the surface.
+// Each pass draws a full-screen triangle in place of its block's mesh, limited to the block's screen rectangle.
+// `DrawRedirect` draws it with the ground shader for the pass type (`GroundShaders`). The ground shader shades every
+// tagged pixel whose ground point lies in its block from the ground buffer, with an opacity that falls off up the surface.
 //
 // Reference at "Shaders/Includes/TerrainOverlay.hlsli".
 namespace OverlayPass {
 
 	// Must match "Shaders/Includes/TerrainOverlay.hlsli".
-	static constexpr float		OVERLAY_MAGIC				= 7919.0f;
 	static constexpr uint32_t	OVERLAY_CONSTANT_REGISTER	= 89;	// c89-c96
 	static constexpr uint32_t	OVERLAY_CONSTANT_COUNT		= 8;
 	static constexpr uint32_t	BLOCK_CONSTANT_REGISTER		= 92;	// c92-c93, per pass
@@ -46,7 +45,6 @@ namespace OverlayPass {
 	// ground point up to ~2.6 times the height past the foot. The height of a shaded surface stays within the range.
 	static constexpr float		BLEND_REACH					= 4.0f;
 	static constexpr uint32_t	TERRAIN_SAMPLER_COUNT		= 14;	// `BaseMap[7]` and `NormalMap[7]`
-	static constexpr const char* OVERLAY_SHADER_MARKER		= "IBOverlayFlags";
 
 	struct FullscreenVertex {
 		float x, y, z;
@@ -61,43 +59,11 @@ namespace OverlayPass {
 	static uint32_t						uiLoggedFrames			= 0;
 	static uint32_t						uiFrameCallbacks		= 0;
 
-	// Checks that every terrain pixel shader in `Data\Shaders\Loose\` is an Intersection Blend build.
-	// With the original shaders, the replay would paint plain terrain over everything.
-	static bool CheckOverlayShaders() {
-		for (uint32_t uiNumber = 2092; uiNumber <= 2146; uiNumber += 2) {
-			char cPath[MAX_PATH];
-			sprintf_s(cPath, "Data\\Shaders\\Loose\\SLS%u.pso", uiNumber);
-
-			FILE* pFile = nullptr;
-			if (fopen_s(&pFile, cPath, "rb") || !pFile) {
-				_MESSAGE("Terrain overlay disabled: %s not found", cPath);
-				return false;
-			}
-
-			std::vector<char> kData;
-			char cBuffer[4096];
-			size_t uiRead;
-			while ((uiRead = fread(cBuffer, 1, sizeof(cBuffer), pFile)) > 0)
-				kData.insert(kData.end(), cBuffer, cBuffer + uiRead);
-			fclose(pFile);
-
-			const char* pMarkerEnd = OVERLAY_SHADER_MARKER + strlen(OVERLAY_SHADER_MARKER);
-			if (std::search(kData.begin(), kData.end(), OVERLAY_SHADER_MARKER, pMarkerEnd) == kData.end()) {
-				_MESSAGE("Terrain overlay disabled: %s is not an Intersection Blend terrain shader", cPath);
-				return false;
-			}
-		}
-
-		return true;
-	}
-
-	// Checks the terrain shaders and initializes the ground buffer, the draw redirect, stencil tagging and the debug views.
-	// The overlay needs both the terrain shaders and the draw redirect.
+	// Loads the ground shaders and initializes the ground buffer, the draw redirect, stencil tagging and the debug views.
+	// The overlay needs both the ground shaders and the draw redirect.
 	// Call once the D3D device exists, at NVSE DeferredInit.
 	void Initialize() {
-		const bool bShadersReady = CheckOverlayShaders();
-		if (bShadersReady)
-			_MESSAGE("Terrain overlay shaders found");
+		const bool bShadersReady = GroundShaders::Load();
 		GroundBuffer::Initialize();
 		DrawRedirect::Initialize();
 		if (bShadersReady && !DrawRedirect::IsReady())
@@ -322,12 +288,13 @@ namespace OverlayPass {
 		const TerrainPasses::PassFilter kInRange = [&kEye, &kViewDirection, fMaxBlockDepth](const NiGeometry* apGeometry) {
 			return IsBlockInRange(apGeometry, kEye, kViewDirection, fMaxBlockDepth);
 		};
+		// c89: debug mode.
 		// c92-c93: block index and eye in block model space, set per pass.
 		// c94-c96: eye-relative world position to the fog position the terrain shaders build from the clip position:
 		// clip x, clip y, w - z. The renderer works relative to the camera. The scene's view projection takes these positions.
 		const D3DXMATRIX& rVP = arViewProjection;
 		const float fConstants[OVERLAY_CONSTANT_COUNT][4] = {
-			{ OVERLAY_MAGIC, static_cast<float>(Settings::eDebugMode), 0.0f, 0.0f },
+			{ static_cast<float>(Settings::eDebugMode), 0.0f, 0.0f, 0.0f },
 			{ kEye.x, kEye.y, kEye.z, 0.0f },
 			{ 1.0f / kViewport.Width, 1.0f / kViewport.Height, 0.0f, 0.0f },
 			{ 0.0f, 0.0f, 0.0f, 0.0f },
@@ -381,7 +348,7 @@ namespace OverlayPass {
 			kStates.Force(D3DRS_DESTBLEND, D3DBLEND_INVSRCALPHA);
 			kStates.Force(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE);
 
-			// Every pass draws a full-screen triangle instead of its block's mesh, through `DrawRedirect`.
+			// Every pass draws a full-screen triangle with its ground shader instead of its block's mesh, through `DrawRedirect`.
 			// Each pixel is shaded by the pass of the block its ground point lies in. The shader identifies the block by c92.
 			// The scissor limits each triangle to the screen rectangle of its block (`GetBlockScissor`).
 			kStates.Force(D3DRS_CULLMODE, D3DCULL_NONE);
@@ -396,11 +363,11 @@ namespace OverlayPass {
 			double dScissoredScreens = 0.0;
 
 			DrawRedirect::ConsumeCounts();
-			DrawRedirect::SetArmed(true);
+			DrawRedirect::SetMode(DrawRedirect::MODE_FULL_SCREEN);
 			const LARGE_INTEGER kReplayStart = GetCounter();
 			// Landscape blocks are only translated. Their model space is centred on the cell.
-			uiPasses = TerrainPasses::Replay(apTarget, kInRange, [&](const NiGeometry* apGeometry) {
-				DrawRedirect::BeginPass();
+			uiPasses = TerrainPasses::Replay(apTarget, kInRange, [&](const NiGeometry* apGeometry, uint32_t auiPassType) {
+				DrawRedirect::BeginPass(GroundShaders::GetOverlayShader(auiPassType));
 				const RECT kScissor = GetBlockScissor(apGeometry, kEye, arViewProjection, fNear, kViewport, fMargin);
 				apDevice->SetScissorRect(&kScissor);
 				dScissoredScreens += static_cast<double>(kScissor.right - kScissor.left) * (kScissor.bottom - kScissor.top) / dScreenArea;
@@ -417,7 +384,7 @@ namespace OverlayPass {
 				};
 				apDevice->SetPixelShaderConstantF(BLOCK_CONSTANT_REGISTER, fBlock[0], 2);
 			});
-			DrawRedirect::SetArmed(false);
+			DrawRedirect::SetMode(DrawRedirect::MODE_OFF);
 			apDevice->SetScissorRect(&kSavedScissor);
 			const double dReplayMilliseconds = GetMillisecondsSince(kReplayStart);
 			const DrawRedirect::Counts kCounts = DrawRedirect::ConsumeCounts();
@@ -430,9 +397,6 @@ namespace OverlayPass {
 					uiPasses, kCounts.uiDrawn, kCounts.uiSkipped, kCounts.uiForeign);
 			}
 		}
-
-		const float fZero[OVERLAY_CONSTANT_COUNT][4] = {};
-		apDevice->SetPixelShaderConstantF(OVERLAY_CONSTANT_REGISTER, fZero[0], OVERLAY_CONSTANT_COUNT);
 
 		for (uint32_t uiSampler = 0; uiSampler < GROUND_SAMPLER_COUNT; uiSampler++) {
 			const uint32_t uiStage = GROUND_BUFFER_SAMPLER + uiSampler;

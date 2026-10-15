@@ -16,11 +16,6 @@
 // stay valid until the next accumulation. The recorder keeps the arguments of each landscape pass draw instead.
 namespace TerrainPasses {
 
-	// Landscape pass types: 8 per texture count (1-7). Variants for no point lights and 6, 12 and 24 point lights,
-	// each with and without canopy shadows. Pass 560, the LOD fade pass, is left out on purpose.
-	static constexpr uint32_t FIRST_LANDSCAPE_PASS	= 503;
-	static constexpr uint32_t LAST_LANDSCAPE_PASS	= 558;
-
 	// Call of the per-pass draw function in the pass group loop of `BSBatchRenderer` (GAME - 0xB9A120).
 	static constexpr uint32_t RENDER_PASS_CALL		= 0xB9A2A1;
 
@@ -81,7 +76,7 @@ namespace TerrainPasses {
 			if (arFilter && !arFilter(GetGeometry(rPass)))
 				continue;
 			if (arBeforeDraw)
-				arBeforeDraw(GetGeometry(rPass));
+				arBeforeDraw(GetGeometry(rPass), rPass.uiPassType);
 
 			pRenderPass(rPass.pRenderPass, rPass.uiPassType, rPass.uiArg2, rPass.uiArg3, rPass.uiArg4);
 			uiCount++;

@@ -5,19 +5,22 @@
 #include "Gamebryo/NiD3DVertexShader.hpp"
 #include "Gamebryo/NiDX9Renderer.hpp"
 
-// Replaces indexed draws on the device with one full-screen triangle while armed.
+// Changes the indexed draws of replayed landscape passes on the device: the pixel shader, and for the overlay the mesh.
 //
 // The overlay shades every tagged pixel with the landscape block its ground point lies in, using that block's
-// textures and constants. The replayed pass of the block binds all of them. Only its mesh does not fit: it covers
-// the terrain behind the statics, not the statics on the block. While armed, the first `DrawIndexedPrimitive` of each
-// replayed pass draws a full-screen triangle with the ground quad vertex shader instead. The hook then restores the
-// vertex shader, declaration and stream 0. The game's state caches never see a change.
+// textures and constants. The replayed pass of the block binds all of them. Its mesh and pixel shader do not fit.
+// The mesh covers the terrain behind the statics, not the statics on the block. In full-screen mode, the first
+// `DrawIndexedPrimitive` of each replayed pass draws a full-screen triangle with the ground quad vertex shader and the
+// pass's ground shader instead. In shader mode, every draw keeps its mesh and only swaps the pixel shader.
+// The height field replay uses it for the field shader. The hook restores everything it changes after the draw.
+// The game's state caches never see a change.
 //
 // A pass can draw its mesh in several pieces. Smooth Terrain's subdivided blocks take 15-19 draw calls per pass.
-// The triangle already covers every pixel of the block, so the hook skips the other draws of the pass.
-// It counts skipped draws whose vertex buffer differs from the first draw's. Such a draw would be another mesh.
+// In full-screen mode the triangle already covers every pixel of the block, so the hook skips the other draws of the
+// pass. It counts skipped draws whose vertex buffer differs from the first draw's. Such a draw would be another mesh.
 //
 // Reference at "Shaders/Ground/GroundQuad.hlsl".
+// Reference at "Plugin/Source/GroundShaders.cpp".
 namespace DrawRedirect {
 
 	// Slot of `IDirect3DDevice9::DrawIndexedPrimitive` in the device vtable.
@@ -39,7 +42,8 @@ namespace DrawRedirect {
 	static DrawIndexedPrimitiveFn		pOriginal		= nullptr;
 	static NiD3DVertexShader*			pVertexShader	= nullptr;
 	static IDirect3DVertexDeclaration9*	pDeclaration	= nullptr;
-	static bool							bArmed			= false;
+	static Mode							eMode			= MODE_OFF;
+	static IDirect3DPixelShader9*		pPassShader		= nullptr;	// Pixel shader for the draws of the current pass
 	static bool							bPassDrawn		= false;	// The current pass has drawn its triangle.
 	static IDirect3DVertexBuffer9*		pPassStream		= nullptr;	// Stream 0 of that draw, compared only, no reference held
 	static uint32_t						uiCount			= 0;
@@ -54,13 +58,30 @@ namespace DrawRedirect {
 		}
 	}
 
-	// Draws the full-screen triangle in place of the first indexed draw of a pass while armed, and skips the others.
-	// Passes the call through when not armed.
+	// Draws the given mesh with the pixel shader of the current pass.
+	static HRESULT DrawWithPassShader(IDirect3DDevice9* apDevice, D3DPRIMITIVETYPE aeType, INT aiBaseVertexIndex, UINT auiMinVertexIndex, UINT auiNumVertices, UINT auiStartIndex, UINT auiPrimitiveCount) {
+		IDirect3DPixelShader9* pSavedPixelShader = nullptr;
+		apDevice->GetPixelShader(&pSavedPixelShader);
+		apDevice->SetPixelShader(pPassShader);
+		const HRESULT hResult = pOriginal(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
+		apDevice->SetPixelShader(pSavedPixelShader);
+		SafeRelease(pSavedPixelShader);
+		return hResult;
+	}
+
+	// Draws according to the mode: unchanged, with the pixel shader of the current pass, or as the full-screen triangle
+	// in place of the first indexed draw of a pass. Full-screen mode skips the other draws of the pass.
 	static HRESULT STDMETHODCALLTYPE DrawIndexedPrimitiveHook(IDirect3DDevice9* apDevice, D3DPRIMITIVETYPE aeType, INT aiBaseVertexIndex, UINT auiMinVertexIndex, UINT auiNumVertices, UINT auiStartIndex, UINT auiPrimitiveCount) {
-		if (!bArmed)
+		if (eMode == MODE_OFF)
 			return pOriginal(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
+		// With the terrain pixel shader, the pass would paint plain terrain over the target.
+		if (!pPassShader)
+			return D3D_OK;
+		if (eMode == MODE_SHADER)
+			return DrawWithPassShader(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
 
 		IDirect3DVertexShader9* pSavedShader = nullptr;
+		IDirect3DPixelShader9* pSavedPixelShader = nullptr;
 		IDirect3DVertexDeclaration9* pSavedDeclaration = nullptr;
 		IDirect3DVertexBuffer9* pSavedStream = nullptr;
 		UINT uiSavedOffset = 0;
@@ -78,19 +99,23 @@ namespace DrawRedirect {
 		pPassStream = pSavedStream;
 
 		apDevice->GetVertexShader(&pSavedShader);
+		apDevice->GetPixelShader(&pSavedPixelShader);
 		apDevice->GetVertexDeclaration(&pSavedDeclaration);
 
 		apDevice->SetVertexDeclaration(pDeclaration);
 		apDevice->SetVertexShader(pVertexShader->GetShaderHandle());
+		apDevice->SetPixelShader(pPassShader);
 		const HRESULT hResult = apDevice->DrawPrimitiveUP(D3DPT_TRIANGLELIST, 1, kTriangle, sizeof(Vertex));
 
 		// `DrawPrimitiveUP` leaves stream 0 unset.
 		apDevice->SetStreamSource(0, pSavedStream, uiSavedOffset, uiSavedStride);
 		apDevice->SetVertexDeclaration(pSavedDeclaration);
 		apDevice->SetVertexShader(pSavedShader);
+		apDevice->SetPixelShader(pSavedPixelShader);
 		SafeRelease(pSavedStream);
 		SafeRelease(pSavedDeclaration);
 		SafeRelease(pSavedShader);
+		SafeRelease(pSavedPixelShader);
 
 		uiCount++;
 		return hResult;
@@ -127,13 +152,16 @@ namespace DrawRedirect {
 		return pOriginal != nullptr;
 	}
 
-	void SetArmed(bool abArmed) {
-		bArmed = abArmed && IsReady();
+	void SetMode(Mode aeMode) {
+		eMode = IsReady() ? aeMode : MODE_OFF;
+		pPassShader = nullptr;
 		bPassDrawn = false;
 	}
 
-	// Lets the next draw call draw the triangle. Call before each replayed pass.
-	void BeginPass() {
+	// Sets the pixel shader for the draws of the next replayed pass. In full-screen mode, also lets the next draw call
+	// draw the triangle. Call before each replayed pass. Without a shader, the draws of the pass are skipped.
+	void BeginPass(IDirect3DPixelShader9* apPixelShader) {
+		pPassShader = apPixelShader;
 		bPassDrawn = false;
 		pPassStream = nullptr;
 	}

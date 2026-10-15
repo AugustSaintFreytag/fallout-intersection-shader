@@ -1,6 +1,6 @@
 # Compiles all shaders in parallel, one fxc process per shader. fxc is single-threaded.
 #   Build\Plugin\Shaders\Loose\IntersectionBlend      plugin shaders
-#   Build\Terrain\<variant>\Shaders\Loose      terrain pixel shaders with the overlay mode, one set per terrain shader mod
+#   Build\Plugin\Shaders\Loose\IntersectionBlend\Ground\<variant>      ground mode pixel shaders, one set per terrain shader mod
 #
 # Usage: pwsh Shaders\compile.ps1 [-Variant all|vpt|parallax|parallax-optimized] [-Force]
 # Shaders are skipped when their output is newer than every file under Shaders\. -Force rebuilds them all.
@@ -44,28 +44,28 @@ Add-Shader 'ps_3_0' 'DebugViews\DebugDepth.hlsl' "$pluginOut\DebugDepth.pso" @('
 Add-Shader 'vs_3_0' 'Ground\GroundBuffer.hlsl' "$pluginOut\GroundBuffer.vso" @('VS')
 Add-Shader 'ps_3_0' 'Ground\GroundBuffer.hlsl' "$pluginOut\GroundBuffer.pso" @('PS')
 Add-Shader 'vs_3_0' 'Ground\GroundQuad.hlsl' "$pluginOut\GroundQuad.vso" @()
+Add-Shader 'ps_3_0' 'Ground\GroundField.hlsl' "$pluginOut\GroundField.pso" @()
 
-# Terrain pixel shaders SLS2092-SLS2146: 7 texture counts x (no point lights, 6, 12, 24 point lights).
-# File number = 2092 + (texture count - 1) * 8 + light variant * 2, as in Vanilla Plus Terrain.
-$terrainVariants = @(
-    @{ Key = 'vpt';                Name = 'Vanilla Plus Terrain';         Source = 'Terrain\VPT\TerrainTemplate.hlsl';      Defines = @() }
-    @{ Key = 'parallax';           Name = 'Parallax Shaders';             Source = 'Terrain\Parallax\TerrainTemplate.hlsl'; Defines = @() }
-    @{ Key = 'parallax-optimized'; Name = 'Parallax Shaders (Optimized)'; Source = 'Terrain\Parallax\TerrainTemplate.hlsl'; Defines = @('MAX_STEPS=8', 'MAX_DISTANCE=1024') }
+# Ground mode pixel shaders: 7 texture counts x (no point lights, 6, 12, 24 point lights), one set per terrain shader mod.
+# File name T<texture count>L<point lights>.pso. The plugin picks the set that matches the installed terrain shaders.
+$groundVariants = @(
+    @{ Key = 'vpt';                Folder = 'VPT';               Source = 'Terrain\VPT\GroundTemplate.hlsl';      Defines = @() }
+    @{ Key = 'parallax';           Folder = 'Parallax';          Source = 'Terrain\Parallax\GroundTemplate.hlsl'; Defines = @() }
+    @{ Key = 'parallax-optimized'; Folder = 'ParallaxOptimized'; Source = 'Terrain\Parallax\GroundTemplate.hlsl'; Defines = @('MAX_STEPS=8', 'MAX_DISTANCE=1024') }
 )
-$pointLights = @($null, 6, 12, 24)
+$pointLights = @(0, 6, 12, 24)
 
-foreach ($terrain in $terrainVariants) {
-    if ($Variant -ne 'all' -and $Variant -ne $terrain.Key) {
+foreach ($ground in $groundVariants) {
+    if ($Variant -ne 'all' -and $Variant -ne $ground.Key) {
         continue
     }
     foreach ($textures in 1..7) {
-        foreach ($lightVariant in 0..3) {
-            $number = 2092 + ($textures - 1) * 8 + $lightVariant * 2
-            $defines = @('PS', "TEX_COUNT=$textures") + $terrain.Defines
-            if ($pointLights[$lightVariant]) {
-                $defines += "NUM_PT_LIGHTS=$($pointLights[$lightVariant])"
+        foreach ($lights in $pointLights) {
+            $defines = @("TEX_COUNT=$textures") + $ground.Defines
+            if ($lights) {
+                $defines += "NUM_PT_LIGHTS=$lights"
             }
-            Add-Shader 'ps_3_0' $terrain.Source "Build\Terrain\$($terrain.Name)\Shaders\Loose\SLS$number.pso" $defines
+            Add-Shader 'ps_3_0' $ground.Source "$pluginOut\Ground\$($ground.Folder)\T$($textures)L$lights.pso" $defines
         }
     }
 }
