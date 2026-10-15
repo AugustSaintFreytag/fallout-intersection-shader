@@ -51,6 +51,7 @@ namespace Profiler {
 	static Accumulator			kDrawn;
 	static Accumulator			kSkipped;
 	static uint32_t				uiForeignDraws			= 0;
+	static Accumulator			kScreens;
 	static Accumulator			kTagged;
 	static Accumulator			kDistant;
 	static uint32_t				uiTagFrames				= 0;
@@ -162,9 +163,10 @@ namespace Profiler {
 			_MESSAGE("%s", cLine);
 		}
 		if (uiReplayFrames) {
-			_MESSAGE("Profile, replay: CPU ms avg/max %.2f/%.2f, passes avg/max %.1f/%.0f, triangles avg/max %.1f/%.0f, skipped draws avg/max %.1f/%.0f, %u skipped with another vertex buffer",
+			_MESSAGE("Profile, replay: CPU ms avg/max %.2f/%.2f, passes avg/max %.1f/%.0f, triangles avg/max %.1f/%.0f, skipped draws avg/max %.1f/%.0f, %u skipped with another vertex buffer, scissored screens avg/max %.2f/%.2f",
 				kReplayCpu.dSum / uiReplayFrames, kReplayCpu.dMax, kPasses.dSum / uiReplayFrames, kPasses.dMax,
-				kDrawn.dSum / uiReplayFrames, kDrawn.dMax, kSkipped.dSum / uiReplayFrames, kSkipped.dMax, uiForeignDraws);
+				kDrawn.dSum / uiReplayFrames, kDrawn.dMax, kSkipped.dSum / uiReplayFrames, kSkipped.dMax, uiForeignDraws,
+				kScreens.dSum / uiReplayFrames, kScreens.dMax);
 		}
 		if (uiTagFrames) {
 			_MESSAGE("Profile, tags: tagged geometry avg/max %.1f/%.0f, beyond max distance avg/max %.1f/%.0f",
@@ -178,6 +180,7 @@ namespace Profiler {
 		kDrawn = {};
 		kSkipped = {};
 		uiForeignDraws = 0;
+		kScreens = {};
 		kTagged = {};
 		kDistant = {};
 		uiTagFrames = 0;
@@ -241,8 +244,8 @@ namespace Profiler {
 	}
 
 	// Records the work of one overlay replay: passes, full-screen triangles drawn, draws skipped, skipped draws with
-	// another vertex buffer, and the CPU time spent issuing them.
-	void RecordReplay(uint32_t auiPasses, uint32_t auiDrawn, uint32_t auiSkipped, uint32_t auiForeign, double adCpuMilliseconds) {
+	// another vertex buffer, the summed scissor area in screens, and the CPU time spent issuing them.
+	void RecordReplay(uint32_t auiPasses, uint32_t auiDrawn, uint32_t auiSkipped, uint32_t auiForeign, double adScreens, double adCpuMilliseconds) {
 		if (!Settings::bProfile)
 			return;
 
@@ -250,6 +253,7 @@ namespace Profiler {
 		kDrawn.Add(auiDrawn);
 		kSkipped.Add(auiSkipped);
 		uiForeignDraws += auiForeign;
+		kScreens.Add(adScreens);
 		kReplayCpu.Add(adCpuMilliseconds);
 		uiReplayFrames++;
 	}
