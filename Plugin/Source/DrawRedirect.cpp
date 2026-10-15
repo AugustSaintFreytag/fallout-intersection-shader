@@ -7,7 +7,7 @@
 
 // Replaces indexed draws on the device with one full-screen triangle while armed.
 //
-// Ground mode shades every tagged pixel with the landscape block its ground point lies in, using that block's
+// The overlay shades every tagged pixel with the landscape block its ground point lies in, using that block's
 // textures and constants. The replayed pass of the block binds all of them. Only its mesh does not fit: it covers
 // the terrain behind the statics, not the statics on the block. While armed, the first `DrawIndexedPrimitive` of each
 // replayed pass draws a full-screen triangle with the ground quad vertex shader instead. The hook then restores the
@@ -101,7 +101,7 @@ namespace DrawRedirect {
 	void Initialize() {
 		pVertexShader = Dependencies::CreateVertexShader("IntersectionBlend\\GroundQuad.vso");
 		if (!pVertexShader) {
-			_MESSAGE("Failed to load the ground quad vertex shader, ground mode disabled");
+			_MESSAGE("Failed to load the ground quad vertex shader, terrain overlay disabled");
 			return;
 		}
 		pVertexShader->IncRefCount();
@@ -112,7 +112,7 @@ namespace DrawRedirect {
 			D3DDECL_END()
 		};
 		if (FAILED(pDevice->CreateVertexDeclaration(kElements, &pDeclaration))) {
-			_MESSAGE("Failed to create the ground quad vertex declaration, ground mode disabled");
+			_MESSAGE("Failed to create the ground quad vertex declaration, terrain overlay disabled");
 			return;
 		}
 
