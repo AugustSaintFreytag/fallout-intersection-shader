@@ -6,6 +6,7 @@
 #include "Bethesda/BSShaderAccumulator.hpp"
 #include "Bethesda/BSShaderManager.hpp"
 #include "Bethesda/BSShaderProperty.hpp"
+#include "Gamebryo/NiCamera.hpp"
 #include "Gamebryo/NiDX9Renderer.hpp"
 #include "Gamebryo/NiNode.hpp"
 
@@ -21,6 +22,8 @@
 // The overlay pass only draws where the bit is set and clears the stencil buffer afterwards.
 //
 // A reference is eligible if its base form type is in the INI type list and its form ID is not blacklisted.
+// Geometry whose bound lies entirely beyond `fMaxDistance` in view depth is not tagged. The overlay is fully faded
+// out there, and every tagged pixel costs terrain shader runs in the overlay replay.
 //
 // Reference at `BSShaderAccumulator::FinishAccumulating_Standard_PreResolveDepth` (GAME - 0xB65AE0).
 namespace StencilTags {
@@ -63,6 +66,14 @@ namespace StencilTags {
 	static const NiGeometry*					pLastGeometry		= nullptr;
 	static bool									bLastEligible		= false;
 
+	// Camera of the tagged stage, for the distance limit.
+	static NiPoint3								kEye;
+	static NiPoint3								kViewDirection;
+
+	// Geometry verdicts since the last `ConsumeCounts`
+	static uint32_t								uiTaggedGeometry	= 0;
+	static uint32_t								uiDistantGeometry	= 0;
+
 	template <typename T>
 	static T Field(const void* apObject, uint32_t auiOffset) {
 		return *reinterpret_cast<const T*>(reinterpret_cast<const uint8_t*>(apObject) + auiOffset);
@@ -80,6 +91,17 @@ namespace StencilTags {
 			pNode = pNode->m_pkParent;
 		}
 		return nullptr;
+	}
+
+	// Returns whether any part of the geometry's bound lies within `fMaxDistance` in view depth of the tagged stage's camera.
+	static bool IsInRange(const NiGeometry* apGeometry) {
+		const NiBound* pBound = apGeometry->m_pWorldBound;
+		if (!pBound)
+			return true;
+
+		const NiPoint3 kOffset(pBound->m_kCenter.x - kEye.x, pBound->m_kCenter.y - kEye.y, pBound->m_kCenter.z - kEye.z);
+		const float fDepth = kOffset.x * kViewDirection.x + kOffset.y * kViewDirection.y + kOffset.z * kViewDirection.z;
+		return fDepth - pBound->m_fRadius <= Settings::fMaxDistance;
 	}
 
 	static bool IsEligible(const NiGeometry* apGeometry) {
@@ -130,7 +152,19 @@ namespace StencilTags {
 		_MESSAGE("Terrain blend selection: %u form types, %u blacklisted base forms", static_cast<uint32_t>(Settings::kTerrainBlendTypes.size()), static_cast<uint32_t>(kBlacklist.size()));
 	}
 
-	static void BeginTagging() {
+	static void BeginTagging(const BSShaderAccumulator* apAccumulator) {
+		// Gamebryo cameras look along their local x axis.
+		const NiCamera* pCamera = apAccumulator->m_pkCamera;
+		if (pCamera) {
+			const NiMatrix3& kRotate = pCamera->m_kWorld.m_Rotate;
+			kEye = pCamera->m_kWorld.m_Translate;
+			kViewDirection = NiPoint3(kRotate.m_pEntry[0][0], kRotate.m_pEntry[1][0], kRotate.m_pEntry[2][0]);
+		}
+		else {
+			kEye = NiPoint3(0.0f, 0.0f, 0.0f);
+			kViewDirection = NiPoint3(0.0f, 0.0f, 0.0f);	// Every bound is in range.
+		}
+
 		pTaggingStates = std::make_unique<ForcedRenderStates>(NiDX9Renderer::GetSingleton()->m_pkRenderState);
 		pTaggingStates->Force(D3DRS_STENCILENABLE, TRUE);
 		pTaggingStates->Force(D3DRS_TWOSIDEDSTENCILMODE, FALSE);
@@ -163,7 +197,7 @@ namespace StencilTags {
 	static void RunPreResolveDepth(PreResolveDepthFn apOriginal, BSShaderAccumulator* apAccumulator) {
 		const bool bTag = !pTaggingStates && ShouldTag(apAccumulator);
 		if (bTag)
-			BeginTagging();
+			BeginTagging(apAccumulator);
 
 		apOriginal(apAccumulator);
 
@@ -201,6 +235,13 @@ namespace StencilTags {
 		if (pGeometry != pLastGeometry) {
 			pLastGeometry = pGeometry;
 			bLastEligible = pGeometry && IsEligible(pGeometry);
+			if (bLastEligible && !IsInRange(pGeometry)) {
+				bLastEligible = false;
+				uiDistantGeometry++;
+			}
+			else if (bLastEligible) {
+				uiTaggedGeometry++;
+			}
 		}
 
 		if (!bLastEligible)
@@ -220,6 +261,12 @@ namespace StencilTags {
 	// Returns the number of opaque stages tagged since the last call and resets it. For diagnostics.
 	uint32_t ConsumeTaggedStageCount() {
 		return std::exchange(uiTaggedStages, 0);
+	}
+
+	// Returns the eligible geometry counted since the last call and resets the counts: tagged, and left untagged for
+	// lying beyond `fMaxDistance`. Geometry drawn in several separate runs of passes counts once per run.
+	GeometryCounts ConsumeGeometryCounts() {
+		return { std::exchange(uiTaggedGeometry, 0), std::exchange(uiDistantGeometry, 0) };
 	}
 
 	// Returns whether the stencil buffer of the given target holds tags from this frame's opaque stage.

@@ -39,6 +39,10 @@ namespace OverlayPass {
 	static constexpr uint32_t	GROUND_SAMPLER_COUNT		= 2;
 	static constexpr float		LANDSCAPE_BLOCK_SIZE		= 2048.0f;
 	static constexpr float		GROUND_MODE					= 3.0f;
+
+	// Reach of the lip past the surface it shades, in multiples of `fBlendRange`. The unrolled mapping moves the
+	// ground point up to ~2.6 times the height past the foot. The height of a shaded surface stays within the range.
+	static constexpr float		LIP_REACH					= 4.0f;
 	static constexpr uint32_t	TERRAIN_SAMPLER_COUNT		= 14;	// `BaseMap[7]` and `NormalMap[7]`
 	static constexpr const char* OVERLAY_SHADER_MARKER		= "IBOverlayFlags";
 
@@ -151,6 +155,17 @@ namespace OverlayPass {
 			|| Settings::eDebugMode == Settings::DEBUG_RAW_VERTEX_COLOR;
 	}
 
+	// Returns whether any part of a landscape block's bound lies within the given view depth of the camera.
+	static bool IsBlockInRange(const NiGeometry* apGeometry, const NiPoint3& arEye, const NiPoint3& arViewDirection, float afMaxDepth) {
+		const NiBound* pBound = apGeometry->m_pWorldBound;
+		if (!pBound)
+			return true;
+
+		const float fDepth = (pBound->m_kCenter.x - arEye.x) * arViewDirection.x + (pBound->m_kCenter.y - arEye.y) * arViewDirection.y
+			+ (pBound->m_kCenter.z - arEye.z) * arViewDirection.z;
+		return fDepth - pBound->m_fRadius <= afMaxDepth;
+	}
+
 	// Returns the lipping mode for `IBOverlayFlags.w`.
 	static float GetLippingMode(bool abGroundMode) {
 		if (abGroundMode)
@@ -173,6 +188,16 @@ namespace OverlayPass {
 		// c90: camera position in world space. The terrain shaders work in the model space of the landscape block.
 		// That space is world-aligned. The camera position places their fragments in the world (`IsSameGround`).
 		const NiPoint3& kEye = apCamera->m_kWorld.m_Translate;
+
+		// Only blocks that can hold a shaded ground point are replayed. Ground mode shades points near the surface,
+		// within `fMaxDistance`. The other modes draw terrain up to `fMaxRayGap` behind the surface. Gamebryo cameras
+		// look along their local x axis.
+		const NiMatrix3& kRotate = apCamera->m_kWorld.m_Rotate;
+		const NiPoint3 kViewDirection(kRotate.m_pEntry[0][0], kRotate.m_pEntry[1][0], kRotate.m_pEntry[2][0]);
+		const float fMaxBlockDepth = Settings::fMaxDistance + Settings::fBlendRange * LIP_REACH + (abGroundMode ? 0.0f : Settings::fMaxRayGap);
+		const TerrainPasses::PassFilter kInRange = [&kEye, &kViewDirection, fMaxBlockDepth](const NiGeometry* apGeometry) {
+			return IsBlockInRange(apGeometry, kEye, kViewDirection, fMaxBlockDepth);
+		};
 		// c92-c93: block index and eye in block model space, set per pass in ground mode.
 		// c94-c96: eye-relative world position to the fog position the terrain shaders build from the clip position:
 		// clip x, clip y, w - z. The renderer works relative to the camera. The scene's view projection takes these positions.
@@ -251,7 +276,7 @@ namespace OverlayPass {
 				DrawRedirect::SetArmed(true);
 				const LARGE_INTEGER kReplayStart = GetCounter();
 				// Landscape blocks are only translated. Their model space is centred on the cell.
-				uiPasses = TerrainPasses::Replay(apTarget, nullptr, [apDevice, &kEye](const NiGeometry* apGeometry) {
+				uiPasses = TerrainPasses::Replay(apTarget, kInRange, [apDevice, &kEye](const NiGeometry* apGeometry) {
 					DrawRedirect::BeginPass();
 					const NiBound* pBound = apGeometry->m_pWorldBound;
 					const NiPoint3& kTranslate = apGeometry->m_kWorld.m_Translate;
@@ -279,7 +304,7 @@ namespace OverlayPass {
 			}
 			else {
 				const LARGE_INTEGER kReplayStart = GetCounter();
-				uiPasses = TerrainPasses::Replay(apTarget);
+				uiPasses = TerrainPasses::Replay(apTarget, kInRange);
 				Profiler::RecordReplay(uiPasses, 0, 0, 0, GetMillisecondsSince(kReplayStart));
 			}
 		}
@@ -442,6 +467,8 @@ namespace OverlayPass {
 			DrawDebugView(pDevice, apAccumulator->m_pkCamera, pGroundTexture);
 
 		StencilTags::Clear(pDevice);
+		const StencilTags::GeometryCounts kTagCounts = StencilTags::ConsumeGeometryCounts();
+		Profiler::RecordTags(kTagCounts.uiTagged, kTagCounts.uiDistant);
 		Profiler::EndFrame();
 
 		if (uiLoggedFrames < 3) {

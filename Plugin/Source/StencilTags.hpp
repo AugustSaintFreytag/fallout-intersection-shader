@@ -18,6 +18,14 @@ namespace StencilTags {
 
 	uint32_t ConsumeTaggedStageCount();
 
+	// Eligible geometry seen during tagging.
+	struct GeometryCounts {
+		uint32_t	uiTagged;
+		uint32_t	uiDistant;	// Beyond `fMaxDistance`, left untagged
+	};
+
+	GeometryCounts ConsumeGeometryCounts();
+
 	bool HasTags(const BSRenderedTexture* apTarget);
 
 	void Clear(IDirect3DDevice9* apDevice);
