@@ -3,6 +3,7 @@
 #include "Dependencies.hpp"
 #include "DrawRedirect.hpp"
 #include "GroundBuffer.hpp"
+#include "Profiler.hpp"
 #include "RenderStates.hpp"
 #include "Settings.hpp"
 #include "StencilTags.hpp"
@@ -93,6 +94,7 @@ namespace OverlayPass {
 		StencilTags::SetEnabled(Settings::bStencilTags && (bOverlayShadersReady || Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS));
 		GroundBuffer::Initialize();
 		DrawRedirect::Initialize();
+		Profiler::Initialize();
 
 		pDebugVS = Dependencies::CreateVertexShader("IntersectionBlend\\DebugDepth.vso");
 		pDebugPS = Dependencies::CreatePixelShader("IntersectionBlend\\DebugDepth.pso");
@@ -123,6 +125,18 @@ namespace OverlayPass {
 		afParams[1] = kFrustum.m_fFar - kFrustum.m_fNear;
 		afParams[2] = kFrustum.m_fNear * kFrustum.m_fFar;
 		afParams[3] = 0.0f;
+	}
+
+	static LARGE_INTEGER GetCounter() {
+		LARGE_INTEGER kCounter;
+		QueryPerformanceCounter(&kCounter);
+		return kCounter;
+	}
+
+	static double GetMillisecondsSince(const LARGE_INTEGER& arStart) {
+		LARGE_INTEGER kFrequency;
+		QueryPerformanceFrequency(&kFrequency);
+		return static_cast<double>(GetCounter().QuadPart - arStart.QuadPart) * 1000.0 / static_cast<double>(kFrequency.QuadPart);
 	}
 
 	// Returns whether the overlay runs in ground mode this frame.
@@ -235,6 +249,7 @@ namespace OverlayPass {
 
 				DrawRedirect::ConsumeCount();
 				DrawRedirect::SetArmed(true);
+				const LARGE_INTEGER kReplayStart = GetCounter();
 				// Landscape blocks are only translated. Their model space is centred on the cell.
 				uiPasses = TerrainPasses::Replay(apTarget, nullptr, [apDevice, &kEye](const NiGeometry* apGeometry) {
 					const NiBound* pBound = apGeometry->m_pWorldBound;
@@ -250,15 +265,20 @@ namespace OverlayPass {
 					apDevice->SetPixelShaderConstantF(BLOCK_CONSTANT_REGISTER, fBlock[0], 2);
 				});
 				DrawRedirect::SetArmed(false);
+				const double dReplayMilliseconds = GetMillisecondsSince(kReplayStart);
+				const uint32_t uiRedirected = DrawRedirect::ConsumeCount();
+				Profiler::RecordReplay(uiPasses, uiRedirected, dReplayMilliseconds);
 
 				static uint32_t uiLoggedGroundFrames = 0;
 				if (uiLoggedGroundFrames < 3) {
 					uiLoggedGroundFrames++;
-					_MESSAGE("Ground mode: %u landscape passes replayed, %u draws redirected", uiPasses, DrawRedirect::ConsumeCount());
+					_MESSAGE("Ground mode: %u landscape passes replayed, %u draws redirected", uiPasses, uiRedirected);
 				}
 			}
 			else {
+				const LARGE_INTEGER kReplayStart = GetCounter();
 				uiPasses = TerrainPasses::Replay(apTarget);
+				Profiler::RecordReplay(uiPasses, 0, GetMillisecondsSince(kReplayStart));
 			}
 		}
 
@@ -384,6 +404,7 @@ namespace OverlayPass {
 		}
 
 		IDirect3DDevice9* pDevice = NiDX9Renderer::GetSingleton()->GetD3DDevice();
+		Profiler::BeginFrame(pDevice);
 
 		// Without tags from this frame, the stencil buffer holds nothing for the overlay to test against.
 		const bool bTagged = StencilTags::HasTags(apTarget);
@@ -410,6 +431,7 @@ namespace OverlayPass {
 		uint32_t uiPasses = 0;
 		if (bOverlay && pGroundTexture && !bAttributeView)
 			uiPasses = RenderTerrainOverlay(pDevice, apAccumulator->m_pkCamera, apTarget, pGroundTexture, GroundBuffer::GetPointTexture(), kViewProjection, bGroundMode);
+		Profiler::EndStage(Profiler::STAGE_OVERLAY);
 		TerrainPasses::Clear();
 
 		if (bDebugReady && Settings::eDebugMode == Settings::DEBUG_DEPTH_BANDS)
@@ -418,6 +440,7 @@ namespace OverlayPass {
 			DrawDebugView(pDevice, apAccumulator->m_pkCamera, pGroundTexture);
 
 		StencilTags::Clear(pDevice);
+		Profiler::EndFrame();
 
 		if (uiLoggedFrames < 3) {
 			const NiFrustum& kFrustum = apAccumulator->m_pkCamera->m_kViewFrustum;

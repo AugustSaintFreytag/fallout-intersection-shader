@@ -1,6 +1,7 @@
 #include "GroundBuffer.hpp"
 
 #include "Dependencies.hpp"
+#include "Profiler.hpp"
 #include "RenderStates.hpp"
 #include "Settings.hpp"
 #include "TerrainPasses.hpp"
@@ -502,7 +503,9 @@ namespace GroundBuffer {
 		const D3DXMATRIX kProjection = *pRenderer->GetD3DProj();
 
 		UpdateField(apDevice, apCamera, apTarget);
+		Profiler::EndStage(Profiler::STAGE_FIELD);
 		DrawGround(apDevice, apCamera, kView, kProjection, apDepthTexture, abGroundMode);
+		Profiler::EndStage(Profiler::STAGE_GROUND);
 		return pGroundTexture;
 	}
 

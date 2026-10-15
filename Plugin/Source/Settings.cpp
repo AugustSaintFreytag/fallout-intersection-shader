@@ -109,6 +109,7 @@ namespace Settings {
 		kTerrainBlendTypes		= ParseFormTypes(GetString("Selection", "sTerrainBlendTypes", "STAT"));
 		kTerrainBlendBlacklist	= GetFormList("TerrainBlendBlacklist");
 		eDebugMode				= static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
+		bProfile				= GetUInt("Debug", "bProfile", bProfile) != 0;
 
 		_MESSAGE("Settings: stencil tags %u, lipping %u, unrolled mapping %u, ground shading %u", bStencilTags, bLipping, bUnrolledMapping, bGroundShading);
 		_MESSAGE("Settings: enabled %u, max distance %.1f, blend range %.1f, max ray gap %.1f, %u terrain blend types, %u blacklist entries, debug mode %u",

@@ -174,6 +174,7 @@ copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plu
     <ClCompile Include="Source\DrawRedirect.cpp" />
     <ClCompile Include="Source\GroundBuffer.cpp" />
     <ClCompile Include="Source\OverlayPass.cpp" />
+    <ClCompile Include="Source\Profiler.cpp" />
     <ClCompile Include="Source\RenderStates.cpp" />
     <ClCompile Include="Source\Settings.cpp" />
     <ClCompile Include="Source\StencilTags.cpp" />
@@ -184,6 +185,7 @@ copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plu
     <ClInclude Include="Source\DrawRedirect.hpp" />
     <ClInclude Include="Source\GroundBuffer.hpp" />
     <ClInclude Include="Source\OverlayPass.hpp" />
+    <ClInclude Include="Source\Profiler.hpp" />
     <ClInclude Include="Source\RenderStates.hpp" />
     <ClInclude Include="Source\Settings.hpp" />
     <ClInclude Include="Source\StencilTags.hpp" />

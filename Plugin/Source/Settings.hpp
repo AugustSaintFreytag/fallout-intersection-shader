@@ -34,6 +34,7 @@ namespace Settings {
 	inline std::vector<uint8_t>		kTerrainBlendTypes;					// Base form type IDs
 	inline std::vector<FormEntry>	kTerrainBlendBlacklist;
 	inline DebugMode				eDebugMode				= DEBUG_NONE;
+	inline bool						bProfile				= false;	// Logs the GPU time of each stage every few seconds.
 
 	void Load();
 

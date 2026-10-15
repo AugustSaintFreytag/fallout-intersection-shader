@@ -156,6 +156,9 @@
     <ClCompile Include="Source\OverlayPass.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Source\Profiler.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
     <ClCompile Include="Source\RenderStates.cpp">
       <Filter>Source</Filter>
     </ClCompile>
@@ -180,6 +183,9 @@
       <Filter>Source</Filter>
     </ClInclude>
     <ClInclude Include="Source\OverlayPass.hpp">
+      <Filter>Source</Filter>
+    </ClInclude>
+    <ClInclude Include="Source\Profiler.hpp">
       <Filter>Source</Filter>
     </ClInclude>
     <ClInclude Include="Source\RenderStates.hpp">
