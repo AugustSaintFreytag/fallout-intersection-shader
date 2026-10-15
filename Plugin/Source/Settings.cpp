@@ -1,5 +1,6 @@
 #include "Settings.hpp"
 
+#include <algorithm>
 #include <sstream>
 
 namespace Settings {
@@ -92,6 +93,8 @@ namespace Settings {
 		bUnrolledMapping		= GetUInt("Blend", "bUnrolledMapping", bUnrolledMapping) != 0;
 		fMaxDistance			= GetFloat("Blend", "fMaxDistance", fMaxDistance);
 		fBlendRange				= GetFloat("Blend", "fBlendRange", fBlendRange);
+		fCropHeight				= GetFloat("StaticBlend", "fCropHeight", fCropHeight);
+		fCropScale				= std::max(GetFloat("StaticBlend", "fCropScale", fCropScale), 1.0f);
 		kTerrainBlendTypes		= ParseFormTypes(GetString("Selection", "sTerrainBlendTypes", "STAT"));
 		kTerrainToStaticBlacklist	= GetEditorIDList("TerrainToStaticBlacklist");
 		kStaticToStaticWhitelist	= GetEditorIDList("StaticToStaticWhitelist");

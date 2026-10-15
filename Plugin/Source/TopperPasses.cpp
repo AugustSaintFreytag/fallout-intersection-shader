@@ -5,7 +5,9 @@
 #include "StencilTags.hpp"
 #include "Settings.hpp"
 #include "TerrainPasses.hpp"
+#include "TopperCrop.hpp"
 
+#include "Bethesda/BSShaderAccumulator.hpp"
 #include "Bethesda/BSShaderManager.hpp"
 #include "Gamebryo/NiDX9Renderer.hpp"
 
@@ -19,9 +21,10 @@
 // toppers first and has Depth Resolve copy the depth again. The ground pass, AO and everything after them see the toppers.
 //
 // The passes are drawn twice. The first replay writes depth and `TOPPER_BIT` only, with colour writes off.
-// `TERRAIN_BLEND_BIT` of the base under each topper pixel stays. The second replay draws colour where `TOPPER_BIT`
-// is set and writes the topper's own `TERRAIN_BLEND_BIT`. It draws the same geometry with the same shaders, so its
-// depth equals the depth of the first replay and passes the depth test of each pass.
+// `TERRAIN_BLEND_BIT` of the base under each topper pixel stays. `TopperCrop` then crops the toppers where they rest
+// on a floor. The second replay draws colour where `TOPPER_BIT` is still set and writes the topper's own
+// `TERRAIN_BLEND_BIT`. It draws the same geometry with the same shaders, so its depth equals the depth of the first
+// replay and passes the depth test of each pass.
 //
 // A pass inherits render states from the passes before it and from its pass group. `BSBatchRenderer` locks alpha test
 // and alpha to coverage for each pass group (GAME - 0xB9A120). The recorder keeps the states a pass starts with.
@@ -101,15 +104,17 @@ namespace TopperPasses {
 		return true;
 	}
 
-	// Draws the topper passes deferred from the opaque stage of the given target, then resolves the scene depth again.
-	// Returns the number of passes drawn.
-	uint32_t Replay(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget) {
+	// Draws the topper passes deferred from the opaque stage of the given target, cropped on floors, then resolves the
+	// scene depth again. The given texture holds the scene depth from Depth Resolve's first resolve.
+	// Returns the number of passes per replay.
+	uint32_t Replay(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture) {
 		const auto itFirst = std::find_if(kRecordedPasses.begin(), kRecordedPasses.end(), [apTarget](const RecordedPass& arPass) { return arPass.pTarget == apTarget; });
 		if (itFirst == kRecordedPasses.end())
 			return 0;
 
 		NiDX9RenderState* pRenderState = NiDX9Renderer::GetSingleton()->m_pkRenderState;
 		IDirect3DDevice9* pDevice = NiDX9Renderer::GetSingleton()->GetD3DDevice();
+		const bool bCrop = TopperCrop::CopyBaseDepth(pDevice, apDepthTexture);
 		RenderStates::SyncTextureStages(pRenderState, pDevice, TEXTURE_STAGE_COUNT);
 
 		// The state the opaque stage left, restored after the replay.
@@ -158,6 +163,15 @@ namespace TopperPasses {
 				ForcedRenderStates kDepthOnly(pRenderState);
 				kDepthOnly.Force(D3DRS_COLORWRITEENABLE, 0);
 				uiCount = DrawPasses();
+			}
+
+			// The crop needs the depth with the toppers. The RESZ resolve of Depth Resolve draws a point, which must
+			// not write stencil. It also binds the depth texture to stage 0 behind the cache.
+			if (bCrop) {
+				kStates.Update(D3DRS_STENCILWRITEMASK, 0);
+				Dependencies::ResolveSceneDepth(apAccumulator, apTarget);
+				TopperCrop::Crop(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
+				RenderStates::SyncTextureStages(pRenderState, pDevice, TEXTURE_STAGE_COUNT);
 			}
 
 			// Colour where `TOPPER_BIT` is set, and the topper's own `TERRAIN_BLEND_BIT`.

@@ -9,6 +9,7 @@
 #include "Settings.hpp"
 #include "StencilTags.hpp"
 #include "TerrainPasses.hpp"
+#include "TopperCrop.hpp"
 #include "TopperPasses.hpp"
 
 #include "Bethesda/BSShaderAccumulator.hpp"
@@ -66,6 +67,7 @@ namespace OverlayPass {
 	void Initialize() {
 		const bool bShadersReady = GroundShaders::Load();
 		TopperPasses::Initialize();
+		TopperCrop::Initialize();
 		GroundBuffer::Initialize();
 		DrawRedirect::Initialize();
 		if (bShadersReady && !DrawRedirect::IsReady())
@@ -519,7 +521,7 @@ namespace OverlayPass {
 		Profiler::BeginFrame(pDevice);
 
 		// Toppers left out of the opaque stage are drawn in any case.
-		const uint32_t uiTopperPasses = apAccumulator && apTarget ? TopperPasses::Replay(apAccumulator, apTarget) : 0;
+		const uint32_t uiTopperPasses = apAccumulator && apTarget ? TopperPasses::Replay(apAccumulator, apTarget, apDepthTexture) : 0;
 		TopperPasses::Clear();
 		Profiler::EndStage(Profiler::STAGE_TOPPERS);
 
