@@ -51,6 +51,9 @@ namespace Profiler {
 	static Accumulator			kDrawn;
 	static Accumulator			kSkipped;
 	static uint32_t				uiForeignDraws			= 0;
+	static Accumulator			kTagged;
+	static Accumulator			kDistant;
+	static uint32_t				uiTagFrames				= 0;
 	static uint32_t				uiGpuFrames				= 0;
 	static uint32_t				uiReplayFrames			= 0;
 	static uint32_t				uiDroppedFrames			= 0;
@@ -163,6 +166,10 @@ namespace Profiler {
 				kReplayCpu.dSum / uiReplayFrames, kReplayCpu.dMax, kPasses.dSum / uiReplayFrames, kPasses.dMax,
 				kDrawn.dSum / uiReplayFrames, kDrawn.dMax, kSkipped.dSum / uiReplayFrames, kSkipped.dMax, uiForeignDraws);
 		}
+		if (uiTagFrames) {
+			_MESSAGE("Profile, tags: tagged geometry avg/max %.1f/%.0f, beyond max distance avg/max %.1f/%.0f",
+				kTagged.dSum / uiTagFrames, kTagged.dMax, kDistant.dSum / uiTagFrames, kDistant.dMax);
+		}
 
 		for (Accumulator& rTime : kStageTimes)
 			rTime = {};
@@ -171,6 +178,9 @@ namespace Profiler {
 		kDrawn = {};
 		kSkipped = {};
 		uiForeignDraws = 0;
+		kTagged = {};
+		kDistant = {};
+		uiTagFrames = 0;
 		uiGpuFrames = 0;
 		uiReplayFrames = 0;
 		uiDroppedFrames = 0;
@@ -242,6 +252,16 @@ namespace Profiler {
 		uiForeignDraws += auiForeign;
 		kReplayCpu.Add(adCpuMilliseconds);
 		uiReplayFrames++;
+	}
+
+	// Records the eligible geometry of one tagged opaque stage: tagged, and left untagged beyond `fMaxDistance`.
+	void RecordTags(uint32_t auiTagged, uint32_t auiDistant) {
+		if (!Settings::bProfile)
+			return;
+
+		kTagged.Add(auiTagged);
+		kDistant.Add(auiDistant);
+		uiTagFrames++;
 	}
 
 }
