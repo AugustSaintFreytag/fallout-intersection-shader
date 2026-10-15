@@ -15,9 +15,11 @@
 #include "Gamebryo/NiD3DVertexShader.hpp"
 #include "Gamebryo/NiDX9Renderer.hpp"
 #include "Gamebryo/NiGeometry.hpp"
+#include "Gamebryo/NiGeometryData.hpp"
 
 #include <algorithm>
 #include <cmath>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -166,12 +168,73 @@ namespace OverlayPass {
 		return fDepth - pBound->m_fRadius <= afMaxDepth;
 	}
 
+	// Height range of a landscape block's mesh, cached per geometry.
+	struct HeightRange {
+		const NiGeometryData*	pData;		// Model data the range was taken from
+		NiPoint3				kCenter;	// World bound centre then
+		float					fMin;		// World z
+		float					fMax;
+		bool					bFromVertices;
+	};
+
+	// Above this many entries the cache is cleared. Freed geometry leaves its entry behind.
+	static constexpr size_t MAX_HEIGHT_RANGES = 1024;
+
+	static std::unordered_map<const NiGeometry*, HeightRange> kHeightRanges;
+
+	// Returns the world height range of a landscape block's terrain.
+	//
+	// Taken from the vertex positions of the model data if the game keeps them, once per mesh. Smooth Terrain rebuilds
+	// meshes as the camera moves, which replaces the model data. Without vertex positions the range is the bound
+	// centre's height plus and minus the bound radius, which is far taller than the terrain.
+	static const HeightRange& GetHeightRange(const NiGeometry* apGeometry) {
+		const NiGeometryData* pData = apGeometry->GetModelData();
+		const NiBound* pBound = apGeometry->m_pWorldBound;
+		const NiPoint3 kCenter = pBound ? pBound->m_kCenter : apGeometry->m_kWorld.m_Translate;
+
+		const auto it = kHeightRanges.find(apGeometry);
+		if (it != kHeightRanges.end() && it->second.pData == pData && it->second.kCenter == kCenter)
+			return it->second;
+
+		if (kHeightRanges.size() >= MAX_HEIGHT_RANGES)
+			kHeightRanges.clear();
+
+		HeightRange kRange = { pData, kCenter, 0.0f, 0.0f, false };
+		if (pData && pData->m_pkVertex && pData->m_usVertices) {
+			float fMin = FLT_MAX;
+			float fMax = -FLT_MAX;
+			for (uint32_t i = 0; i < pData->m_usVertices; i++) {
+				fMin = std::min(fMin, pData->m_pkVertex[i].z);
+				fMax = std::max(fMax, pData->m_pkVertex[i].z);
+			}
+			// Landscape blocks are only translated.
+			kRange.fMin = fMin + apGeometry->m_kWorld.m_Translate.z;
+			kRange.fMax = fMax + apGeometry->m_kWorld.m_Translate.z;
+			kRange.bFromVertices = true;
+		}
+		else {
+			const float fRadius = pBound ? pBound->m_fRadius : LANDSCAPE_BLOCK_SIZE;
+			kRange.fMin = kCenter.z - fRadius;
+			kRange.fMax = kCenter.z + fRadius;
+		}
+
+		static uint32_t uiLoggedRanges = 0;
+		if (uiLoggedRanges < 8) {
+			uiLoggedRanges++;
+			_MESSAGE("Block height range: geometry %p, %u vertices, z %.0f to %.0f from %s (bound centre z %.0f, radius %.0f)",
+				apGeometry, pData ? pData->m_usVertices : 0, kRange.fMin, kRange.fMax, kRange.bFromVertices ? "vertices" : "bound",
+				kCenter.z, pBound ? pBound->m_fRadius : 0.0f);
+		}
+
+		return kHeightRanges[apGeometry] = kRange;
+	}
+
 	// Returns the screen rectangle that holds every pixel whose ground point can lie in the given landscape block.
 	//
-	// The box spans the block's square and its bound's full height, widened by the reach of the lip. Its corners are
-	// projected with the scene's view projection, which takes eye-relative positions. Box edges that cross the near
-	// plane contribute the point where they cross it, in place of the corner behind it. An empty rectangle means
-	// the box lies behind the camera.
+	// The box spans the block's square and its terrain's height range (`GetHeightRange`), widened by the reach of the
+	// lip. Its corners are projected with the scene's view projection, which takes eye-relative positions. Box edges
+	// that cross the near plane contribute the point where they cross it, in place of the corner behind it.
+	// An empty rectangle means the box lies behind the camera.
 	static RECT GetBlockScissor(const NiGeometry* apGeometry, const NiPoint3& arEye, const D3DXMATRIX& arViewProjection, float afNear, const D3DVIEWPORT9& arViewport, float afMargin) {
 		const RECT kFull = { static_cast<LONG>(arViewport.X), static_cast<LONG>(arViewport.Y), static_cast<LONG>(arViewport.X + arViewport.Width), static_cast<LONG>(arViewport.Y + arViewport.Height) };
 		const NiBound* pBound = apGeometry->m_pWorldBound;
@@ -181,7 +244,9 @@ namespace OverlayPass {
 		const float fCenterX = (std::floor(pBound->m_kCenter.x / LANDSCAPE_BLOCK_SIZE) + 0.5f) * LANDSCAPE_BLOCK_SIZE;
 		const float fCenterY = (std::floor(pBound->m_kCenter.y / LANDSCAPE_BLOCK_SIZE) + 0.5f) * LANDSCAPE_BLOCK_SIZE;
 		const float fHalfSize = LANDSCAPE_BLOCK_SIZE * 0.5f + afMargin;
-		const float fHalfHeight = pBound->m_fRadius + afMargin;
+		const HeightRange& rHeights = GetHeightRange(apGeometry);
+		const float fBottom = rHeights.fMin - afMargin;
+		const float fTop = rHeights.fMax + afMargin;
 
 		// Corner i has the high x, y and z side for bits 1, 2 and 4.
 		D3DXVECTOR4 kCorners[8];
@@ -189,7 +254,7 @@ namespace OverlayPass {
 			const D3DXVECTOR4 kPosition(
 				fCenterX + ((i & 1) ? fHalfSize : -fHalfSize) - arEye.x,
 				fCenterY + ((i & 2) ? fHalfSize : -fHalfSize) - arEye.y,
-				pBound->m_kCenter.z + ((i & 4) ? fHalfHeight : -fHalfHeight) - arEye.z,
+				((i & 4) ? fTop : fBottom) - arEye.z,
 				1.0f);
 			D3DXVec4Transform(&kCorners[i], &kPosition, &arViewProjection);
 		}
@@ -353,6 +418,10 @@ namespace OverlayPass {
 				const float fMargin = Settings::fBlendRange * LIP_REACH;
 				const double dScreenArea = static_cast<double>(kViewport.Width) * kViewport.Height;
 				double dScissoredScreens = 0.0;
+
+				// A tagged pixel runs the shader of every block that draws before its own. Its own block clears the tag.
+				// Most tagged area belongs to statics near the camera, whose ground points lie in the blocks around it.
+				TerrainPasses::SortNearestFirst(kEye);
 
 				DrawRedirect::ConsumeCounts();
 				DrawRedirect::SetArmed(true);

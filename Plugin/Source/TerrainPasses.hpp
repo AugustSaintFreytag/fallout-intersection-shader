@@ -4,6 +4,7 @@
 
 class BSRenderedTexture;
 class NiGeometry;
+class NiPoint3;
 
 namespace TerrainPasses {
 
@@ -16,6 +17,8 @@ namespace TerrainPasses {
 
 	// A callback run right before a replayed pass is drawn, with its landscape geometry.
 	typedef std::function<void(const NiGeometry* apGeometry)> PassCallback;
+
+	void SortNearestFirst(const NiPoint3& arPosition);
 
 	uint32_t Replay(const BSRenderedTexture* apTarget, const PassFilter& arFilter = nullptr, const PassCallback& arBeforeDraw = nullptr);
 

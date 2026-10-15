@@ -7,6 +7,8 @@
 #include "Gamebryo/NiGeometry.hpp"
 #include "Gamebryo/NiNode.hpp"
 
+#include <algorithm>
+#include <cmath>
 #include <vector>
 
 // Records the landscape render passes as the batch renderer draws them, for drawing again later in the frame.
@@ -65,6 +67,27 @@ namespace TerrainPasses {
 
 	static const NiGeometry* GetGeometry(const RecordedPass& arPass) {
 		return static_cast<const BSShaderProperty::RenderPass*>(arPass.pRenderPass)->pGeometry;
+	}
+
+	// Returns the distance from a position to the nearest point of a pass's geometry bound, 0 inside the bound.
+	static float GetBoundDistance(const RecordedPass& arPass, const NiPoint3& arPosition) {
+		const NiGeometry* pGeometry = GetGeometry(arPass);
+		const NiBound* pBound = pGeometry ? pGeometry->m_pWorldBound : nullptr;
+		if (!pBound)
+			return 0.0f;
+
+		const float fX = pBound->m_kCenter.x - arPosition.x;
+		const float fY = pBound->m_kCenter.y - arPosition.y;
+		const float fZ = pBound->m_kCenter.z - arPosition.z;
+		return std::max(std::sqrt(fX * fX + fY * fY + fZ * fZ) - pBound->m_fRadius, 0.0f);
+	}
+
+	// Orders the recorded passes by the distance of their geometry bound from the given position, nearest first.
+	// Passes at the same distance keep their order.
+	void SortNearestFirst(const NiPoint3& arPosition) {
+		std::stable_sort(kRecordedPasses.begin(), kRecordedPasses.end(), [&arPosition](const RecordedPass& arA, const RecordedPass& arB) {
+			return GetBoundDistance(arA, arPosition) < GetBoundDistance(arB, arPosition);
+		});
 	}
 
 	// Draws the landscape passes recorded into the given target again, with the state the caller has forced.
