@@ -88,12 +88,12 @@
       <AdditionalDependencies>d3d9.lib;dxguid.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Message>Installing DLL...</Message>
+      <Message>Copying build output to Build\Plugin...</Message>
       <Command>if not exist "$(ProjectDir)..\Build\Plugin\NVSE\Plugins" mkdir "$(ProjectDir)..\Build\Plugin\NVSE\Plugins"
-copy "$(TargetPath)" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetFileName)"
-copy "$(TargetDir)$(TargetName).pdb" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetName).pdb"
-copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlend.ini"
-copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlendForms.ini"</Command>
+copy "$(TargetPath)" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetFileName)" >nul
+copy "$(TargetDir)$(TargetName).pdb" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetName).pdb" >nul
+copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlend.ini" >nul
+copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlendForms.ini" >nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -132,12 +132,12 @@ copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVS
       <AdditionalDependencies>d3d9.lib;dxguid.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Message>Installing DLL...</Message>
+      <Message>Copying build output to Build\Plugin...</Message>
       <Command>if not exist "$(ProjectDir)..\Build\Plugin\NVSE\Plugins" mkdir "$(ProjectDir)..\Build\Plugin\NVSE\Plugins"
-copy "$(TargetPath)" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetFileName)"
-copy "$(TargetDir)$(TargetName).pdb" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetName).pdb"
-copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlend.ini"
-copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlendForms.ini"</Command>
+copy "$(TargetPath)" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetFileName)" >nul
+copy "$(TargetDir)$(TargetName).pdb" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetName).pdb" >nul
+copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlend.ini" >nul
+copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlendForms.ini" >nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
