@@ -30,6 +30,8 @@ namespace Settings {
 	inline float fEdgeSoftness = 0.5f; // 0-1, width of the terrain fade in blend amount. 1 fades over the whole range.
 	inline float fEdgeFeatureStrength = 0.75f; // 0-2, how far texture features shift the terrain edge
 	inline float fEdgeFeatureSize = 12.0f; // Game units, ~17 cm. Blur of the height that the features stand out from.
+	inline float fContactShadow = 0.4f; // 0-1, darkening of the static where the terrain blend meets it
+	inline float fContactShadowWidth = 0.25f; // 0.05-0.5, share of the blend range the contact shadow fades over
 	inline float fEdgeNoise = 0.25f; // 0-1, how far grain noise moves the topper crop
 	inline float fEdgeGrainSize = 4.0f; // Game units, ~6 cm
 	inline float fCropHeight = 6.0f; // Game units above the floor, ~9 cm. 0 turns the crop off.

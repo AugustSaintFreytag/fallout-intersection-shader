@@ -10,13 +10,14 @@
 #include "IntersectionBlend.hlsli"
 #include "Packing.hlsli"
 
-float4 IBOverlayParams : register(c89); // x = debug mode, y = edge softness, z = edge feature strength
+float4 IBOverlayParams : register(c89); // x = debug mode, y = edge softness, z = edge feature strength,
+                                        // w = contact shadow intensity
 float4 IBEyePosition : register(c90);   // xyz = camera position in world space
 float4 IBScreenParams : register(c91);  // x = 1 / width, y = 1 / height
 float4 IBBlock : register(c92);         // xy = grid index of the landscape block being drawn
 float4 IBModelEye : register(c93);      // xyz = camera position in the block's model space
 float4 IBFogRows[3] : register(c94);    // Eye-relative world position to the fog position (clip x, y, w - z)
-float4 IBEdgeParams : register(c97);    // x = edge feature size, y = blend range
+float4 IBEdgeParams : register(c97);    // x = edge feature size, y = blend range, z = contact shadow width
 
 // Written by the ground buffer pass: ground points (s14) and their packed attributes (s15).
 //
@@ -134,6 +135,7 @@ static const float FeatureGain = 8.0f;
 // The blend amount falls by up to 1.5 per blend range, at the middle of its `smoothstep`.
 static const float EdgeAntialiasSlope = 1.5f;
 static const float MinEdgeWidth = 0.001f;
+static const float MinShadowWidth = 0.01f;
 
 // Returns the texture features at a texture coordinate, in [-1, 1]: positive on pebbles and other raised features,
 // negative in the gaps between them.
@@ -155,17 +157,31 @@ float GetEdgeFeatures(float2 uv, float2 dx, float2 dy, int texCount, sampler2D t
     return clamp(features * FeatureGain, -1.0f, 1.0f);
 }
 
-// Returns the opacity of an overlay pixel.
+// Returns the output of an overlay pixel from its shaded terrain colour: the terrain over the static, and the contact
+// shadow on the static past the edge.
 //
 // The texture features shift the blend amount: pebbles stay longer, the gaps between them go first. The shift is
 // strongest halfway through the blend range and vanishes at both ends. The contact line stays covered, and nothing
 // shows past the end of the range. The edge softness is the width of the fade around half the shifted amount. At 1 and
-// without features, the opacity is the blend amount. Towards 0 the edge gets hard, antialiased over about a pixel.
-float GetOverlayAlpha(GroundSample ground, float features) {
+// without features, the coverage is the blend amount. Towards 0 the edge gets hard, antialiased over about a pixel.
+//
+// The contact shadow darkens the static where the material meets it. Screen-space AO only sees the geometric contact
+// line at the bottom of the band. It is strongest at the edge, under the coverage too, and fades out over the shadow
+// width below half the shifted amount. It follows the features, so pebbles cast their own. The overlay blends with
+// source alpha. The terrain over the darkened static is terrain × coverage + static × (1 − shadow) × (1 − coverage).
+// The alpha is 1 − (1 − shadow) × (1 − coverage), and the colour is the terrain × coverage over that alpha.
+float4 GetOverlayOutput(GroundSample ground, float features, float3 color) {
     float amount = ground.amount;
     float shaped = amount + 4.0f * amount * (1.0f - amount) * IBOverlayParams.z * features;
 
     float footprint = max(length(ground.uvDx), length(ground.uvDy)) * TerrainUVScale;
     float width = max(max(IBOverlayParams.y, footprint * EdgeAntialiasSlope / IBEdgeParams.y), MinEdgeWidth);
-    return saturate((shaped - 0.5f) / width + 0.5f) * ground.distanceFade;
+    float coverage = saturate((shaped - 0.5f) / width + 0.5f);
+
+    float shadowDistance = saturate((0.5f - shaped) / max(IBEdgeParams.z, MinShadowWidth));
+    float shadow = IBOverlayParams.w * (1.0f - smoothstep(0.0f, 1.0f, shadowDistance));
+
+    float alpha = 1.0f - (1.0f - shadow) * (1.0f - coverage);
+    float3 premultiplied = alpha > 0.0f ? color * coverage / alpha : 0.0f;
+    return float4(premultiplied, alpha * ground.distanceFade);
 }

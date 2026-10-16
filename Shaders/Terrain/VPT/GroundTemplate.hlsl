@@ -111,8 +111,7 @@ PS_OUTPUT main(PS_INPUT IN) {
         finalColor = GetBlockColor(IBBlock.xy);
 
     // Vanilla Plus Terrain has no height maps. The edge is the plain soft fade.
-    OUT.color_0.a = IsEdgeFeatureDebug() ? ground.distanceFade : GetOverlayAlpha(ground, 0.0f);
-    OUT.color_0.rgb = finalColor;
+    OUT.color_0 = IsEdgeFeatureDebug() ? float4(finalColor, ground.distanceFade) : GetOverlayOutput(ground, 0.0f, finalColor);
 
     return OUT;
 };

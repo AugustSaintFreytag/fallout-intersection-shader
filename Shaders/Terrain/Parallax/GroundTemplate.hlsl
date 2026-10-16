@@ -122,8 +122,7 @@ PS_OUTPUT main(PS_INPUT IN) {
     else if (IsOverlayMaskDebug())
         finalColor = GetBlockColor(IBBlock.xy);
 
-    OUT.color_0.a = IsEdgeFeatureDebug() ? ground.distanceFade : GetOverlayAlpha(ground, features);
-    OUT.color_0.rgb = finalColor;
+    OUT.color_0 = IsEdgeFeatureDebug() ? float4(finalColor, ground.distanceFade) : GetOverlayOutput(ground, features, finalColor);
 
     return OUT;
 };

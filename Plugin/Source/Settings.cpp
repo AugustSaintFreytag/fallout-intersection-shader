@@ -95,13 +95,15 @@ namespace Settings {
 		fEdgeSoftness = std::clamp(GetFloat("Edge", "fEdgeSoftness", fEdgeSoftness), 0.0f, 1.0f);
 		fEdgeFeatureStrength = std::clamp(GetFloat("Edge", "fEdgeFeatureStrength", fEdgeFeatureStrength), 0.0f, 2.0f);
 		fEdgeFeatureSize = std::max(GetFloat("Edge", "fEdgeFeatureSize", fEdgeFeatureSize), 1.0f);
+		fContactShadow = std::clamp(GetFloat("Edge", "fContactShadow", fContactShadow), 0.0f, 1.0f);
+		fContactShadowWidth = std::clamp(GetFloat("Edge", "fContactShadowWidth", fContactShadowWidth), 0.05f, 0.5f);
 		fEdgeNoise = std::clamp(GetFloat("Edge", "fEdgeNoise", fEdgeNoise), 0.0f, 1.0f);
 		fEdgeGrainSize = std::max(GetFloat("Edge", "fEdgeGrainSize", fEdgeGrainSize), 0.5f);
 		fCropHeight = GetFloat("StaticBlend", "fCropHeight", fCropHeight);
 		eDebugMode = static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
 
-		_MESSAGE("Settings: Unrolled mapping %u, blend range %.1f, climb height %.1f, edge softness %.2f, edge feature strength %.2f, edge feature size %.1f, edge noise %.2f, edge grain size %.1f, crop height %.1f, debug mode %u",
-			bUnrolledMapping, fBlendRange, fBlendClimbHeight, fEdgeSoftness, fEdgeFeatureStrength, fEdgeFeatureSize, fEdgeNoise, fEdgeGrainSize, fCropHeight, eDebugMode);
+		_MESSAGE("Settings: Unrolled mapping %u, blend range %.1f, climb height %.1f, edge softness %.2f, edge feature strength %.2f, edge feature size %.1f, contact shadow %.2f over %.2f, edge noise %.2f, edge grain size %.1f, crop height %.1f, debug mode %u",
+			bUnrolledMapping, fBlendRange, fBlendClimbHeight, fEdgeSoftness, fEdgeFeatureStrength, fEdgeFeatureSize, fContactShadow, fContactShadowWidth, fEdgeNoise, fEdgeGrainSize, fCropHeight, eDebugMode);
 	}
 
 	// Reads `IntersectionBlend.ini` and the form lists in `IntersectionBlendForms.ini`. Missing keys keep their defaults.
