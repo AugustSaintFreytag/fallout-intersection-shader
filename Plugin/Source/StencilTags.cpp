@@ -135,7 +135,7 @@ namespace StencilTags {
 			sprintf_s(cKey, "%08X", Field<uint32_t>(apBaseForm, FORM_REF_ID));
 			if (!kLoggedUntagged.insert(cKey).second)
 				return;
-			_MESSAGE("Untagged: %s %s, form type %u: %s", cKey, GetEditorID(apBaseForm), Field<uint8_t>(apBaseForm, FORM_TYPE_ID), apReason);
+			_MESSAGE("Untagged: %s '%s', form type %u: %s.", cKey, GetEditorID(apBaseForm), Field<uint8_t>(apBaseForm, FORM_TYPE_ID), apReason);
 			return;
 		}
 
@@ -145,14 +145,14 @@ namespace StencilTags {
 		const char* pRootName = pRoot->GetName() ? pRoot->GetName() : "";
 		if (!kLoggedUntagged.insert(std::string("root ") + pRootName).second)
 			return;
-		_MESSAGE("Untagged: geometry \"%s\" under root \"%s\": %s", apGeometry->GetName() ? apGeometry->GetName() : "", pRootName, apReason);
+		_MESSAGE("Untagged: Geometry '%s' under root '%s': %s.", apGeometry->GetName() ? apGeometry->GetName() : "", pRootName, apReason);
 	}
 
 	// Returns the tag bits for the reference that owns the given geometry, 0 if it gets none.
 	static uint32_t GetTags(const NiGeometry* apGeometry) {
 		const void* pReference = GetParentReference(apGeometry);
 		if (!pReference) {
-			LogUntagged(apGeometry, nullptr, "no BSFadeNode with a reference above it");
+			LogUntagged(apGeometry, nullptr, "No BSFadeNode with a reference above it");
 			return 0;
 		}
 
@@ -163,9 +163,9 @@ namespace StencilTags {
 		const uint32_t uiFormID = Field<uint32_t>(pBaseForm, FORM_REF_ID);
 		uint32_t uiTags = 0;
 		if (!bTypeEligible[Field<uint8_t>(pBaseForm, FORM_TYPE_ID)])
-			LogUntagged(apGeometry, pBaseForm, "form type not in sTerrainBlendTypes");
+			LogUntagged(apGeometry, pBaseForm, "Form type not in sTerrainBlendTypes");
 		else if (kBlacklist.contains(uiFormID))
-			LogUntagged(apGeometry, pBaseForm, "blacklisted");
+			LogUntagged(apGeometry, pBaseForm, "Blacklisted");
 		else
 			uiTags |= TERRAIN_BLEND_BIT;
 		if (kToppers.contains(uiFormID))
@@ -182,7 +182,7 @@ namespace StencilTags {
 			if (pForm)
 				kFormIDs.insert(Field<uint32_t>(pForm, FORM_REF_ID));
 			else
-				_MESSAGE("%s: no form with editor ID %s, skipped", apListName, rEditorID.c_str());
+				_MESSAGE("%s: No form with editor ID '%s', will be skipped.", apListName, rEditorID.c_str());
 		}
 		return kFormIDs;
 	}

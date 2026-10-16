@@ -67,7 +67,7 @@ namespace Settings {
 				}
 			}
 			if (!bFound)
-				_MESSAGE("Settings: unknown form type %s, skipped", sName.c_str());
+				_MESSAGE("Settings: Unknown form type '%s', will be skipped.", sName.c_str());
 		}
 		return kTypes;
 	}
@@ -103,7 +103,7 @@ namespace Settings {
 		bProfile = GetUInt("Debug", "bProfile", bProfile) != 0;
 		bDeferToppers = GetUInt("Debug", "bDeferToppers", bDeferToppers) != 0;
 
-		_MESSAGE("Settings: enabled %u, unrolled mapping %u, max distance %.1f, blend range %.1f, ortho factor %.2f, %u terrain blend types, %u blacklist entries, %u toppers, debug mode %u, profile %u",
+		_MESSAGE("Settings: Enabled %u, unrolled mapping %u, max distance %.1f, blend range %.1f, ortho factor %.2f, %u terrain blend types, %u blacklist entries, %u toppers, debug mode %u, profile %u",
 			bEnabled, bUnrolledMapping, fMaxDistance, fBlendRange, fBlendRangeOrthoFactor, static_cast<uint32_t>(kBlendTypesTerrainToStatic.size()), static_cast<uint32_t>(kTerrainToStaticBlacklist.size()),
 			static_cast<uint32_t>(kStaticToStaticWhitelist.size()), eDebugMode, bProfile);
 	}

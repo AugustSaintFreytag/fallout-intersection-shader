@@ -189,7 +189,7 @@ namespace OverlayPass {
 		static uint32_t uiLoggedRanges = 0;
 		if (uiLoggedRanges < 8) {
 			uiLoggedRanges++;
-			_MESSAGE("Block height range: geometry %p, %u vertices, z %.0f to %.0f from %s (bound centre z %.0f, radius %.0f)",
+			_MESSAGE("Block height range: Geometry %p, %u vertices, z %.0f to %.0f from %s (bound centre z %.0f, radius %.0f)",
 				apGeometry, pData ? pData->m_usVertices : 0, kRange.fMin, kRange.fMax, kRange.bFromVertices ? "vertices" : "bound",
 				kCenter.z, pBound ? pBound->m_fRadius : 0.0f);
 		}
@@ -501,11 +501,11 @@ namespace OverlayPass {
 			return;
 
 		if (uiCallbacks == 0 && bRendering) {
-			_MESSAGE("Loop %u: no post-resolve callback this frame (%u tagged stages), world rendering paused?", uiLoop, uiTaggedStages);
+			_MESSAGE("Loop %u: No post-resolve callback this frame (%u tagged stages), world rendering paused?", uiLoop, uiTaggedStages);
 			uiLogLines++;
 		}
 		else if (uiCallbacks && !bRendering) {
-			_MESSAGE("Loop %u: post-resolve callbacks resumed (%u callbacks, %u tagged stages)", uiLoop, uiCallbacks, uiTaggedStages);
+			_MESSAGE("Loop %u: Post-resolve callbacks resumed (%u callbacks, %u tagged stages)", uiLoop, uiCallbacks, uiTaggedStages);
 			uiLogLines++;
 		}
 		else if (uiCallbacks > 1 || uiTaggedStages > 1 || uiTaggedStages != uiCallbacks) {
@@ -580,7 +580,7 @@ namespace OverlayPass {
 
 		if (uiLoggedFrames < 3) {
 			const NiFrustum& kFrustum = apAccumulator->m_pkCamera->m_kViewFrustum;
-			_MESSAGE("Post-resolve callback: target %p, depth %p, near %.2f, far %.2f, stencil tags %u, %u topper passes and %u landscape passes replayed",
+			_MESSAGE("Post-resolve callback: Target %p, depth %p, near %.2f, far %.2f, stencil tags %u, %u topper passes and %u landscape passes replayed",
 				apTarget, apDepthTexture, kFrustum.m_fNear, kFrustum.m_fFar, bTagged, uiTopperPasses, uiPasses);
 			uiLoggedFrames++;
 		}

@@ -174,12 +174,12 @@ namespace Profiler {
 				kScreens.dSum / uiReplayFrames, kScreens.dMax);
 		}
 		if (uiCallbackFrames) {
-			_MESSAGE("Profile, CPU ms avg/max: callback %.2f/%.2f, of it topper replay %.2f/%.2f, of it depth resolves %.2f/%.2f",
+			_MESSAGE("Profile, CPU ms avg/max: Callback %.2f/%.2f, of it topper replay %.2f/%.2f, of it depth resolves %.2f/%.2f",
 				kCallbackCpu.dSum / uiCallbackFrames, kCallbackCpu.dMax, kTopperCpu.dSum / uiCallbackFrames, kTopperCpu.dMax,
 				kResolveCpu.dSum / uiCallbackFrames, kResolveCpu.dMax);
 		}
 		if (uiTagFrames) {
-			_MESSAGE("Profile, tags: tagged geometry avg/max %.1f/%.0f, of it toppers avg/max %.1f/%.0f, beyond max distance avg/max %.1f/%.0f",
+			_MESSAGE("Profile, tags: Tagged geometry avg/max %.1f/%.0f, of it toppers avg/max %.1f/%.0f, beyond max distance avg/max %.1f/%.0f",
 				kTagged.dSum / uiTagFrames, kTagged.dMax, kToppers.dSum / uiTagFrames, kToppers.dMax, kDistant.dSum / uiTagFrames, kDistant.dMax);
 		}
 
@@ -210,7 +210,7 @@ namespace Profiler {
 		if (!Settings::bProfile || apDevice != pDevice)
 			return;
 		if (!bReady && !CreateQueries()) {
-			_MESSAGE("Profiler: timestamp queries not supported, profiling disabled");
+			_MESSAGE("Profiler: Timestamp queries not supported, profiling disabled");
 			Settings::bProfile = false;
 			return;
 		}

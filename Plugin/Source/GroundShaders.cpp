@@ -100,14 +100,14 @@ namespace GroundShaders {
 	static ShaderSet DetectSet() {
 		std::vector<char> kCode;
 		if (!ReadFile(INSTALLED_SHADER_PATH, kCode)) {
-			_MESSAGE("Terrain overlay disabled: %s not found. Vanilla Plus Terrain is required.", INSTALLED_SHADER_PATH);
+			_MESSAGE("Terrain overlay disabled: '%s' not found. Vanilla Plus Terrain is required.", INSTALLED_SHADER_PATH);
 			return SET_NONE;
 		}
 
 		if (Contains(kCode, "SunColor"))
 			return HasLiteral(kCode, 1.0f / 1024.0f) ? SET_PARALLAX_OPTIMIZED : SET_PARALLAX;
 		if (!Contains(kCode, "PSLightColor"))
-			_MESSAGE("Unknown terrain shaders in %s, using the ground shaders for Vanilla Plus Terrain", INSTALLED_SHADER_PATH);
+			_MESSAGE("Unknown terrain shaders in '%s', using the ground shaders for Vanilla Plus Terrain.", INSTALLED_SHADER_PATH);
 		return SET_VPT;
 	}
 
@@ -119,7 +119,7 @@ namespace GroundShaders {
 		if (eSet == SET_NONE)
 			return false;
 
-		_MESSAGE("Terrain shaders: %s", kSetNames[eSet]);
+		_MESSAGE("Terrain shaders: '%s'.", kSetNames[eSet]);
 
 		for (uint32_t uiTextures = 0; uiTextures < TEXTURE_COUNTS; uiTextures++) {
 			for (uint32_t uiLights = 0; uiLights < LIGHT_VARIANTS; uiLights++) {
@@ -127,7 +127,7 @@ namespace GroundShaders {
 				sprintf_s(cPath, "IntersectionBlend\\Ground\\%s\\T%uL%u.pso", kSetFolders[eSet], uiTextures + 1, kPointLights[uiLights]);
 				NiD3DPixelShader* pShader = Dependencies::CreatePixelShader(cPath);
 				if (!pShader) {
-					_MESSAGE("Terrain overlay disabled: failed to load the ground shader %s", cPath);
+					_MESSAGE("Terrain overlay disabled: Failed to load the ground shader '%s'.", cPath);
 					return false;
 				}
 				pShader->IncRefCount();
@@ -137,7 +137,7 @@ namespace GroundShaders {
 
 		pFieldShader = Dependencies::CreatePixelShader("IntersectionBlend\\GroundField.pso");
 		if (!pFieldShader) {
-			_MESSAGE("Terrain overlay disabled: failed to load the field shader");
+			_MESSAGE("Terrain overlay disabled: Failed to load the field shader.");
 			return false;
 		}
 		pFieldShader->IncRefCount();

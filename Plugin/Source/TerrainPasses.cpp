@@ -103,7 +103,7 @@ namespace TerrainPasses {
 			const NiGeometry* pGeometry = GetGeometry(rPass);
 			const NiNode* pParent = pGeometry ? pGeometry->m_pkParent : nullptr;
 			const NiBound* pBound = pGeometry ? pGeometry->m_pWorldBound : nullptr;
-			_MESSAGE("  pass %u, geometry %p \"%s\", parent \"%s\", bound centre %.0f, %.0f, %.0f, radius %.0f", rPass.uiPassType, pGeometry,
+			_MESSAGE("  pass %u, geometry %p '%s', parent '%s', bound centre %.0f, %.0f, %.0f, radius %.0f", rPass.uiPassType, pGeometry,
 				pGeometry && pGeometry->GetName() ? pGeometry->GetName() : "", pParent && pParent->GetName() ? pParent->GetName() : "",
 				pBound ? pBound->m_kCenter.x : 0.0f, pBound ? pBound->m_kCenter.y : 0.0f, pBound ? pBound->m_kCenter.z : 0.0f, pBound ? pBound->m_fRadius : 0.0f);
 		}

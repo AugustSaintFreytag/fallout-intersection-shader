@@ -286,7 +286,7 @@ namespace GroundBuffer {
 			uiLoggedCameras++;
 			D3DXMATRIX kInverseView;
 			D3DXMatrixInverse(&kInverseView, nullptr, pRenderer->GetD3DView());
-			_MESSAGE("Height field camera: requested at %.1f, %.1f, %.1f, view matrix places it at %.1f, %.1f, %.1f (camera eye %.1f, %.1f, %.1f)",
+			_MESSAGE("Height field camera: Requested at %.1f, %.1f, %.1f, view matrix places it at %.1f, %.1f, %.1f (camera eye %.1f, %.1f, %.1f)",
 				kFieldCenter.x, kFieldCenter.y, kFieldCenter.z, kInverseView._41, kInverseView._42, kInverseView._43, kEye.x, kEye.y, kEye.z);
 		}
 
@@ -446,7 +446,7 @@ namespace GroundBuffer {
 			IDirect3DBaseTexture9* pBound[2] = {};
 			apDevice->GetTexture(0, &pBound[0]);
 			apDevice->GetTexture(1, &pBound[1]);
-			_MESSAGE("Ground pass: scene depth %p, height field %p, bound at s0 %p, s1 %p", apDepthTexture, pFieldTexture, pBound[0], pBound[1]);
+			_MESSAGE("Ground pass: Scene depth %p, height field %p, bound at s0 %p, s1 %p", apDepthTexture, pFieldTexture, pBound[0], pBound[1]);
 			SafeRelease(pBound[0]);
 			SafeRelease(pBound[1]);
 
@@ -455,7 +455,7 @@ namespace GroundBuffer {
 			const D3DXVECTOR4 kFieldOrigin(0.0f, 0.0f, 0.0f, 1.0f);
 			D3DXVECTOR4 kFieldCentreRelative;
 			D3DXVec4Transform(&kFieldCentreRelative, &kFieldOrigin, &kFieldToWorld);
-			_MESSAGE("Ground pass: camera eye %.1f, %.1f, %.1f, view matrix eye %.1f, %.1f, %.1f, field centre %.1f, %.1f, %.1f, field matrix centre relative to the eye %.1f, %.1f, %.1f",
+			_MESSAGE("Ground pass: Camera eye %.1f, %.1f, %.1f, view matrix eye %.1f, %.1f, %.1f, field centre %.1f, %.1f, %.1f, field matrix centre relative to the eye %.1f, %.1f, %.1f",
 				kEye.x, kEye.y, kEye.z, kInverseView._41, kInverseView._42, kInverseView._43, kFieldCenter.x, kFieldCenter.y, kFieldCenter.z,
 				kFieldCentreRelative.x / kFieldCentreRelative.w, kFieldCentreRelative.y / kFieldCentreRelative.w, kFieldCentreRelative.z / kFieldCentreRelative.w);
 		}
