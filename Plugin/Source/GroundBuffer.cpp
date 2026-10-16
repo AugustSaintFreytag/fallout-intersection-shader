@@ -391,6 +391,7 @@ namespace GroundBuffer {
 		const float fTexelSize[4]			= { 1.0f / uiGroundWidth, 1.0f / uiGroundHeight, 0.0f, 0.0f };
 		const float fGroundParams[4]		= { abHeightLayout ? 1.0f : 0.0f, Settings::fBlendRange, Settings::bUnrolledMapping ? 1.0f : 0.0f, Settings::eDebugMode == Settings::DEBUG_RAW_VERTEX_COLOR ? 1.0f : 0.0f };
 		const float fEyePosition[4]			= { kEye.x, kEye.y, kEye.z, 0.0f };
+		const float fBlendParams[4]			= { Settings::fBlendRangeOrthoFactor, 0.0f, 0.0f, 0.0f };
 
 		apDevice->SetPixelShaderConstantF(0, fDepthParams, 1);
 		apDevice->SetPixelShaderConstantF(1, fProjectionParams, 1);
@@ -401,6 +402,7 @@ namespace GroundBuffer {
 		apDevice->SetPixelShaderConstantF(14, fTexelSize, 1);
 		apDevice->SetPixelShaderConstantF(15, fGroundParams, 1);
 		apDevice->SetPixelShaderConstantF(16, fEyePosition, 1);
+		apDevice->SetPixelShaderConstantF(17, fBlendParams, 1);
 		apDevice->SetVertexShaderConstantF(0, fTexelSize, 1);
 
 		apDevice->SetRenderTarget(0, pGroundSurface);

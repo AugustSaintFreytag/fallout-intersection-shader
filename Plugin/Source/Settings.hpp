@@ -23,6 +23,7 @@ namespace Settings {
 	inline bool						bUnrolledMapping		= true;		// Off: the blend samples the terrain straight under the surface.
 	inline float					fMaxDistance			= 4096.0f;	// Game units, ~58 m
 	inline float					fBlendRange				= 48.0f;	// Game units along the surface, ~70 cm
+	inline float					fBlendRangeOrthoFactor	= 0.5f;		// 0-1, factor on `fBlendRange` for faces orthogonal to the terrain
 	inline float					fCropHeight				= 6.0f;		// Game units above the floor, ~9 cm. 0 turns the crop off.
 	inline float					fCropScale				= 8.0f;		// Game units, size of the crop noise features
 	inline std::vector<uint8_t>		kTerrainBlendTypes;					// Base form type IDs

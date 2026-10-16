@@ -52,6 +52,7 @@ float4 ScreenParams : register(c14);            // x, y = screen texel size
 float4 GroundParams : register(c15);            // x = 1 for the height layout (debug mode 4), y = blend range,
                                                 // z = 1 for unrolled mapping, w = 1 for the raw attributes (debug mode 7)
 float4 EyePosition : register(c16);             // xyz = camera position in world space
+float4 BlendParams : register(c17);             // x = blend range factor on faces orthogonal to the terrain
 
 static const float NO_GROUND = 1.0e9f;
 
@@ -207,7 +208,7 @@ PS_OUTPUT main(VS_OUTPUT IN) {
     float3 surfaceDy = GetShorterDifference(surface, GetSurface(IN.uv + float2(0.0f, screenTexel.y)), GetSurface(IN.uv - float2(0.0f, screenTexel.y)));
     float3 surfaceNormal = normalize(cross(surfaceDx, surfaceDy));
 
-    float alpha = IntersectionBlendFactor(height, sceneDepth, groundNormal, surfaceNormal, GroundParams.y, FieldParams.z);
+    float alpha = IntersectionBlendFactor(height, sceneDepth, groundNormal, surfaceNormal, GroundParams.y, BlendParams.x, FieldParams.z);
 
     float3 groundPoint = foot;
     if (GroundParams.z > 0.5f)
