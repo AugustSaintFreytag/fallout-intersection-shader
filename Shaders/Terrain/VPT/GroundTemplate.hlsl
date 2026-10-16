@@ -108,7 +108,12 @@ PS_OUTPUT main(PS_INPUT IN) {
     if (IsOverlayMaskDebug())
         finalColor = GetBlockColor(IBBlock.xy);
 
-    OUT.color_0.a = ground.alpha;
+    float noHeight[7] = { 0, 0, 0, 0, 0, 0, 0 }; // Vanilla Plus Terrain has no height maps. The hard edge uses luma.
+    float materialHeight = 0.5f;
+    [branch] if (IBOverlayParams.y > 0.5f)
+        materialHeight = GetMaterialHeight(ground.uv, dx, dy, texCount, BaseMap, blends, noHeight);
+
+    OUT.color_0.a = GetOverlayAlpha(ground, materialHeight);
     OUT.color_0.rgb = finalColor;
 
     return OUT;

@@ -150,7 +150,7 @@ FieldAttributes GetFieldAttributes(float3 groundPoint) {
 //   COLOR0 = xyz: eye-relative ground point that shades the surface (its foot, unrolled if enabled),
 //            w: terrain normal x and y, as 2 x 12 bits of x * 0.5 + 0.5
 //   COLOR1 = 3 x 8 bits per channel: x = blend weights 0-2, y = blend weights 3-5, z = blend weight 6 and vertex
-//            colour r, g, w = vertex colour b, overlay opacity, 0
+//            colour r, g, w = vertex colour b, blend amount, distance fade
 //
 // Height layout, for debug mode 4 only. The overlay does not run with it. Pixels without terrain under them get
 // `NO_GROUND` in COLOR0.g:
@@ -208,7 +208,8 @@ PS_OUTPUT main(VS_OUTPUT IN) {
     float3 surfaceDy = GetShorterDifference(surface, GetSurface(IN.uv + float2(0.0f, screenTexel.y)), GetSurface(IN.uv - float2(0.0f, screenTexel.y)));
     float3 surfaceNormal = normalize(cross(surfaceDx, surfaceDy));
 
-    float alpha = IntersectionBlendFactor(height, sceneDepth, groundNormal, surfaceNormal, GroundParams.y, BlendParams.x, FieldParams.z);
+    float amount = IntersectionBlendFactor(height, groundNormal, surfaceNormal, GroundParams.y, BlendParams.x);
+    float distanceFade = GetDistanceFade(sceneDepth, FieldParams.z);
 
     float3 groundPoint = foot;
     if (GroundParams.z > 0.5f)
@@ -228,7 +229,7 @@ PS_OUTPUT main(VS_OUTPUT IN) {
         PackUnorm3x8(attributes.blend0.xyz),
         PackUnorm3x8(float3(attributes.blend0.w, attributes.blend1.xy)),
         PackUnorm3x8(float3(attributes.blend1.z, attributes.vertexColor.rg)),
-        PackUnorm3x8(float3(attributes.vertexColor.b, alpha, 0.0f)));
+        PackUnorm3x8(float3(attributes.vertexColor.b, amount, distanceFade)));
     return result;
 }
 

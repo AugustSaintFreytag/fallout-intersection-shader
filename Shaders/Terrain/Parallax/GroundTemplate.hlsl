@@ -116,7 +116,11 @@ PS_OUTPUT main(PS_INPUT IN) {
     if (IsOverlayMaskDebug())
         finalColor = GetBlockColor(IBBlock.xy);
 
-    OUT.color_0.a = ground.alpha;
+    float materialHeight = 0.5f;
+    [branch] if (IBOverlayParams.y > 0.5f)
+        materialHeight = GetMaterialHeight(offsetUV, dx, dy, texCount, BaseMap, weights, heightStatus);
+
+    OUT.color_0.a = GetOverlayAlpha(ground, materialHeight);
     OUT.color_0.rgb = finalColor;
 
     return OUT;

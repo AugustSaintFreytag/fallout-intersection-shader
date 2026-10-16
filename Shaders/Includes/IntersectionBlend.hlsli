@@ -9,7 +9,13 @@ static const float MinTiltSine = 1e-3f;
 // Lower limit for the blend range beyond `SelfHeight`. Keeps the fade edges of `smoothstep` apart.
 static const float MinBlendRange = 1e-3f;
 
-// Returns the opacity of the terrain overlay over a visible surface.
+// Returns the fade of the terrain overlay towards the maximum distance, 1 near the camera and 0 at the maximum distance.
+float GetDistanceFade(float sceneDepth, float maxDistance) {
+    return 1.0f - smoothstep(maxDistance * 0.8f, maxDistance, sceneDepth);
+}
+
+// Returns the blend amount of the terrain overlay over a visible surface, 1 at the contact line and 0 at the end of the
+// blend range. Without the hard edge, the amount is the opacity of the overlay.
 //
 // The height is the height of the visible surface above the terrain right under it, along the terrain normal.
 // Both normals are normalized and in the same space. The surface normal can have either sign.
@@ -20,12 +26,10 @@ static const float MinBlendRange = 1e-3f;
 //
 // The ortho factor scales the blend range on faces at right angles to the terrain. Faces parallel to the terrain get
 // the full range. In between, the range follows the cosine of the tilt.
-float IntersectionBlendFactor(float height, float sceneDepth, float3 groundNormal, float3 surfaceNormal, float blendRange, float orthoFactor, float maxDistance) {
-    float distanceFade = 1.0f - smoothstep(maxDistance * 0.8f, maxDistance, sceneDepth);
-
+float IntersectionBlendFactor(float height, float3 groundNormal, float3 surfaceNormal, float blendRange, float orthoFactor) {
     // Contact line. The overlay only draws on samples of tagged statics. This is never terrain over terrain.
     if (abs(height) < SelfHeight)
-        return distanceFade;
+        return 1.0f;
 
     if (height < 0.0f)
         return 0.0f; // The visible surface lies below the terrain there.
@@ -34,7 +38,7 @@ float IntersectionBlendFactor(float height, float sceneDepth, float3 groundNorma
     float tiltSine = sqrt(saturate(1.0f - tiltCosine * tiltCosine));
     float contactDistance = height / max(tiltSine, MinTiltSine);
     float tiltRange = max(blendRange * lerp(orthoFactor, 1.0f, abs(tiltCosine)), SelfHeight + MinBlendRange);
-    return (1.0f - smoothstep(SelfHeight, tiltRange, contactDistance)) * distanceFade;
+    return 1.0f - smoothstep(SelfHeight, tiltRange, contactDistance);
 }
 
 // Size of a landscape block, a quarter of a cell. Blocks lie on a world-aligned grid.
