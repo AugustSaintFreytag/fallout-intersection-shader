@@ -520,6 +520,7 @@ namespace OverlayPass {
 	void __cdecl OnPostResolveDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture) {
 		uiFrameCallbacks++;
 
+		const LARGE_INTEGER kCallbackStart = GetCounter();
 		IDirect3DDevice9* pDevice = NiDX9Renderer::GetSingleton()->GetD3DDevice();
 		Profiler::BeginFrame(pDevice);
 
@@ -527,6 +528,8 @@ namespace OverlayPass {
 		const uint32_t uiTopperPasses = apAccumulator && apTarget ? TopperPasses::Replay(apAccumulator, apTarget, apDepthTexture) : 0;
 		TopperPasses::Clear();
 		Profiler::EndStage(Profiler::STAGE_TOPPERS);
+		const double dTopperMilliseconds = GetMillisecondsSince(kCallbackStart);
+		const double dResolveMilliseconds = TopperPasses::ConsumeResolveMilliseconds();
 
 		// Diagnostics: a line whenever the frames switch between having deferred toppers and having none.
 		static bool		bHadToppers			= false;
@@ -539,6 +542,7 @@ namespace OverlayPass {
 
 		if (!Settings::bEnabled || !apAccumulator || !apAccumulator->m_pkCamera || !apDepthTexture) {
 			TerrainPasses::Clear();
+			Profiler::RecordCallbackCpu(GetMillisecondsSince(kCallbackStart), dTopperMilliseconds, dResolveMilliseconds);
 			Profiler::EndFrame();
 			return;
 		}
@@ -580,6 +584,7 @@ namespace OverlayPass {
 		StencilTags::Clear(pDevice);
 		const StencilTags::GeometryCounts kTagCounts = StencilTags::ConsumeGeometryCounts();
 		Profiler::RecordTags(kTagCounts.uiTagged, kTagCounts.uiToppers, kTagCounts.uiDistant);
+		Profiler::RecordCallbackCpu(GetMillisecondsSince(kCallbackStart), dTopperMilliseconds, dResolveMilliseconds);
 		Profiler::EndFrame();
 
 		if (uiLoggedFrames < 3) {

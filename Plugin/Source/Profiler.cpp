@@ -47,6 +47,10 @@ namespace Profiler {
 	// Log Interval
 	static Accumulator			kStageTimes[STAGE_COUNT];
 	static Accumulator			kReplayCpu;
+	static Accumulator			kCallbackCpu;
+	static Accumulator			kTopperCpu;
+	static Accumulator			kResolveCpu;
+	static uint32_t				uiCallbackFrames		= 0;
 	static Accumulator			kPasses;
 	static Accumulator			kDrawn;
 	static Accumulator			kSkipped;
@@ -169,6 +173,11 @@ namespace Profiler {
 				kDrawn.dSum / uiReplayFrames, kDrawn.dMax, kSkipped.dSum / uiReplayFrames, kSkipped.dMax, uiForeignDraws,
 				kScreens.dSum / uiReplayFrames, kScreens.dMax);
 		}
+		if (uiCallbackFrames) {
+			_MESSAGE("Profile, CPU ms avg/max: callback %.2f/%.2f, of it topper replay %.2f/%.2f, of it depth resolves %.2f/%.2f",
+				kCallbackCpu.dSum / uiCallbackFrames, kCallbackCpu.dMax, kTopperCpu.dSum / uiCallbackFrames, kTopperCpu.dMax,
+				kResolveCpu.dSum / uiCallbackFrames, kResolveCpu.dMax);
+		}
 		if (uiTagFrames) {
 			_MESSAGE("Profile, tags: tagged geometry avg/max %.1f/%.0f, of it toppers avg/max %.1f/%.0f, beyond max distance avg/max %.1f/%.0f",
 				kTagged.dSum / uiTagFrames, kTagged.dMax, kToppers.dSum / uiTagFrames, kToppers.dMax, kDistant.dSum / uiTagFrames, kDistant.dMax);
@@ -177,6 +186,10 @@ namespace Profiler {
 		for (Accumulator& rTime : kStageTimes)
 			rTime = {};
 		kReplayCpu = {};
+		kCallbackCpu = {};
+		kTopperCpu = {};
+		kResolveCpu = {};
+		uiCallbackFrames = 0;
 		kPasses = {};
 		kDrawn = {};
 		kSkipped = {};
@@ -258,6 +271,18 @@ namespace Profiler {
 		kScreens.Add(adScreens);
 		kReplayCpu.Add(adCpuMilliseconds);
 		uiReplayFrames++;
+	}
+
+	// Records the CPU time of one post-resolve callback, of the topper replay in it, and of the depth resolves in that.
+	// Waits for the GPU inside a call show up here and not in the GPU times.
+	void RecordCallbackCpu(double adCallbackMilliseconds, double adTopperMilliseconds, double adResolveMilliseconds) {
+		if (!Settings::bProfile)
+			return;
+
+		kCallbackCpu.Add(adCallbackMilliseconds);
+		kTopperCpu.Add(adTopperMilliseconds);
+		kResolveCpu.Add(adResolveMilliseconds);
+		uiCallbackFrames++;
 	}
 
 	// Records the eligible geometry of one tagged opaque stage: tagged, tagged as toppers, and left untagged beyond

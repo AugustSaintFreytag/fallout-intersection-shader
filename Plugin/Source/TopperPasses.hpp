@@ -13,4 +13,6 @@ namespace TopperPasses {
 
 	void Clear();
 
+	double ConsumeResolveMilliseconds();
+
 }

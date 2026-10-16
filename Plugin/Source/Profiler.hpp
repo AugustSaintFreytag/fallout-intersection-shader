@@ -23,4 +23,6 @@ namespace Profiler {
 
 	void RecordTags(uint32_t auiTagged, uint32_t auiToppers, uint32_t auiDistant);
 
+	void RecordCallbackCpu(double adCallbackMilliseconds, double adTopperMilliseconds, double adResolveMilliseconds);
+
 }

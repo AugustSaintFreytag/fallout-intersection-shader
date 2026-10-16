@@ -12,6 +12,7 @@
 #include "Gamebryo/NiDX9Renderer.hpp"
 
 #include <algorithm>
+#include <utility>
 #include <vector>
 
 // Draws the toppers after the opaque stage instead of during it.
@@ -68,6 +69,17 @@ namespace TopperPasses {
 
 	static bool							bEnabled	= false;
 	static std::vector<RecordedPass>	kRecordedPasses;
+	static double						dResolveMilliseconds	= 0.0;	// CPU time in `ResolveSceneDepth` since the last `ConsumeResolveMilliseconds`
+
+	// Resolves the scene depth through Depth Resolve and adds the CPU time of the call to the profile.
+	static void ResolveSceneDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget) {
+		LARGE_INTEGER kStart, kEnd, kFrequency;
+		QueryPerformanceCounter(&kStart);
+		Dependencies::ResolveSceneDepth(apAccumulator, apTarget);
+		QueryPerformanceCounter(&kEnd);
+		QueryPerformanceFrequency(&kFrequency);
+		dResolveMilliseconds += static_cast<double>(kEnd.QuadPart - kStart.QuadPart) * 1000.0 / static_cast<double>(kFrequency.QuadPart);
+	}
 
 	// Enables deferral if Depth Resolve can resolve the depth again. Toppers are drawn in the opaque stage otherwise.
 	// Call at NVSE DeferredInit.
@@ -169,7 +181,7 @@ namespace TopperPasses {
 			// not write stencil. It also binds the depth texture to stage 0 behind the cache.
 			if (bCrop) {
 				kStates.Update(D3DRS_STENCILWRITEMASK, 0);
-				Dependencies::ResolveSceneDepth(apAccumulator, apTarget);
+				ResolveSceneDepth(apAccumulator, apTarget);
 				TopperCrop::Crop(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
 				RenderStates::SyncTextureStages(pRenderState, pDevice, TEXTURE_STAGE_COUNT);
 			}
@@ -187,8 +199,13 @@ namespace TopperPasses {
 		SetZFunc(pRenderState, pDevice, uiSavedZFunc);
 
 		// After the forced states are restored. The resolve sets states of its own.
-		Dependencies::ResolveSceneDepth(apAccumulator, apTarget);
+		ResolveSceneDepth(apAccumulator, apTarget);
 		return uiCount;
+	}
+
+	// Returns the CPU time spent in depth resolves since the last call and resets it.
+	double ConsumeResolveMilliseconds() {
+		return std::exchange(dResolveMilliseconds, 0.0);
 	}
 
 	// Drops all recorded passes. Called once per frame before rendering, and after the replay.
