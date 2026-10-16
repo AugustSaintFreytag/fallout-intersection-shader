@@ -531,15 +531,6 @@ namespace OverlayPass {
 		const double dTopperMilliseconds = GetMillisecondsSince(kCallbackStart);
 		const double dResolveMilliseconds = TopperPasses::ConsumeResolveMilliseconds();
 
-		// Diagnostics: a line whenever the frames switch between having deferred toppers and having none.
-		static bool		bHadToppers			= false;
-		static uint32_t	uiTopperLogLines	= 0;
-		if ((uiTopperPasses != 0) != bHadToppers && uiTopperLogLines < 200) {
-			_MESSAGE("Toppers, callback %u: %u topper passes replayed", uiFrameCallbacks, uiTopperPasses);
-			uiTopperLogLines++;
-		}
-		bHadToppers = uiTopperPasses != 0;
-
 		if (!Settings::bEnabled || !apAccumulator || !apAccumulator->m_pkCamera || !apDepthTexture) {
 			TerrainPasses::Clear();
 			Profiler::RecordCallbackCpu(GetMillisecondsSince(kCallbackStart), dTopperMilliseconds, dResolveMilliseconds);
