@@ -10,14 +10,13 @@
 #include "IntersectionBlend.hlsli"
 #include "Packing.hlsli"
 
-float4 IBOverlayParams : register(c89); // x = debug mode, y = 1 for the hard edge, z = edge height influence,
-                                        // w = edge noise amount
+float4 IBOverlayParams : register(c89); // x = debug mode, y = edge softness, z = edge feature strength
 float4 IBEyePosition : register(c90);   // xyz = camera position in world space
 float4 IBScreenParams : register(c91);  // x = 1 / width, y = 1 / height
 float4 IBBlock : register(c92);         // xy = grid index of the landscape block being drawn
 float4 IBModelEye : register(c93);      // xyz = camera position in the block's model space
 float4 IBFogRows[3] : register(c94);    // Eye-relative world position to the fog position (clip x, y, w - z)
-float4 IBEdgeParams : register(c97);    // x = edge grain size, y = blend range
+float4 IBEdgeParams : register(c97);    // x = edge feature size, y = blend range
 
 // Written by the ground buffer pass: ground points (s14) and their packed attributes (s15).
 //
@@ -28,6 +27,11 @@ sampler2D IBGroundAttributes : register(s15);
 // Returns whether debug mode 2 (overlay mask) or higher is active.
 bool IsOverlayMaskDebug() {
     return IBOverlayParams.x > 1.5f;
+}
+
+// Returns whether debug mode 11 (edge features) is active.
+bool IsEdgeFeatureDebug() {
+    return abs(IBOverlayParams.x - 11.0f) < 0.5f;
 }
 
 // Turns a tangent frame onto the given ground normal, keeping its handedness.
@@ -121,53 +125,47 @@ void GetGroundBasis(float3 groundNormal, out float3 tangent, out float3 binormal
     RebaseOnGround(tangent, binormal, normal, groundNormal);
 }
 
-// Hard Edge
+// Edge Shape
 
-// Rec. 709 luma weights.
-static const float3 LumaWeights = float3(0.2126f, 0.7152f, 0.0722f);
-
-// Contrast of the luma around its texture mean, where a texture has no height. Luma varies less than height.
-static const float LumaContrast = 2.0f;
-
-// Mip level that samples the mean colour of a texture. Higher levels clamp to the smallest mip.
-static const float MeanMipLevel = 12.0f;
+// Gain on the texture features. Pebbles rise about 0.05-0.1 above the blurred height in common ground textures.
+static const float FeatureGain = 8.0f;
 
 // Width of the antialiased edge, in blend amount per pixel footprint over the blend range.
 // The blend amount falls by up to 1.5 per blend range, at the middle of its `smoothstep`.
 static const float EdgeAntialiasSlope = 1.5f;
-static const float MinEdgeWidth = 0.01f;
+static const float MinEdgeWidth = 0.001f;
 
-// Returns the blended material height at a texture coordinate, in [0, 1].
-// Textures with a height in the diffuse alpha use it, flagged by the height status. Others use the luma of the diffuse
-// around its texture mean.
-float GetMaterialHeight(float2 uv, float2 dx, float2 dy, int texCount, sampler2D tex[7], float weights[7], float status[7]) {
-    float height = 0.0f;
+// Returns the texture features at a texture coordinate, in [-1, 1]: positive on pebbles and other raised features,
+// negative in the gaps between them.
+//
+// The features are the height in the diffuse alpha minus the same height blurred to the edge feature size, weighted
+// by the shading weights. Textures without a height add nothing (height status 0). The blurred height comes from a
+// coarser mip, picked by gradients of the feature size. Where the pixel footprint is larger than the feature size,
+// both heights come from the same mip and the features fade out.
+float GetEdgeFeatures(float2 uv, float2 dx, float2 dy, int texCount, sampler2D tex[7], float weights[7], float status[7]) {
+    float featureUV = IBEdgeParams.x / TerrainUVScale;
+    float2 blurDx = dx * max(1.0f, featureUV / max(length(dx), 1e-6f));
+    float2 blurDy = dy * max(1.0f, featureUV / max(length(dy), 1e-6f));
+
+    float features = 0.0f;
     [unroll] for (int i = 0; i < texCount; i++) {
-        float4 diffuse = tex2Dgrad(tex[i], uv, dx, dy);
-        float textureHeight = diffuse.a;
-        if (status[i] <= 0.0f) {
-            float meanLuma = dot(tex2Dlod(tex[i], float4(uv, 0.0f, MeanMipLevel)).rgb, LumaWeights);
-            textureHeight = saturate(0.5f + (dot(diffuse.rgb, LumaWeights) - meanLuma) * LumaContrast);
-        }
-        height += textureHeight * weights[i];
+        if (status[i] > 0.0f)
+            features += (tex2Dgrad(tex[i], uv, dx, dy).a - tex2Dgrad(tex[i], uv, blurDx, blurDy).a) * weights[i];
     }
-    return height;
+    return clamp(features * FeatureGain, -1.0f, 1.0f);
 }
 
 // Returns the opacity of an overlay pixel.
 //
-// With the hard edge, the material is present where the blend amount exceeds 1 minus its reach (`GetEdgeReach`).
-// High spots of the texture reach further up the static and low spots drop out first. The edge is antialiased over
-// about a pixel, from the pixel footprint of the ground point.
-// Without the hard edge, the blend amount is the opacity.
-float GetOverlayAlpha(GroundSample ground, float materialHeight) {
-    [branch] if (IBOverlayParams.y < 0.5f)
-        return ground.amount * ground.distanceFade;
-
-    float2 world = ground.position.xy - IBModelEye.xy + IBEyePosition.xy;
-    float reach = GetEdgeReach(world, materialHeight, IBOverlayParams.z, IBOverlayParams.w, IBEdgeParams.x);
+// The texture features shift the blend amount: pebbles stay longer, the gaps between them go first. The shift is
+// strongest halfway through the blend range and vanishes at both ends. The contact line stays covered, and nothing
+// shows past the end of the range. The edge softness is the width of the fade around half the shifted amount. At 1 and
+// without features, the opacity is the blend amount. Towards 0 the edge gets hard, antialiased over about a pixel.
+float GetOverlayAlpha(GroundSample ground, float features) {
+    float amount = ground.amount;
+    float shaped = amount + 4.0f * amount * (1.0f - amount) * IBOverlayParams.z * features;
 
     float footprint = max(length(ground.uvDx), length(ground.uvDy)) * TerrainUVScale;
-    float width = max(footprint * EdgeAntialiasSlope / IBEdgeParams.y, MinEdgeWidth);
-    return saturate((ground.amount + reach - 1.0f) / width) * ground.distanceFade;
+    float width = max(max(IBOverlayParams.y, footprint * EdgeAntialiasSlope / IBEdgeParams.y), MinEdgeWidth);
+    return saturate((shaped - 0.5f) / width + 0.5f) * ground.distanceFade;
 }

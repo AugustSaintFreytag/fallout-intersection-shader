@@ -17,6 +17,7 @@ namespace Settings {
 		DEBUG_TOPPER_TAGS = 8, // Tints every pixel tagged as a topper for static-to-static blending.
 		DEBUG_TOPPER_CROP = 9, // Paints the pixels the topper crop cuts away red.
 		DEBUG_TOPPER_CROP_CAUSE = 10, // Paints every crop candidate by why it is cropped or not.
+		DEBUG_EDGE_FEATURES = 11, // Draws the texture features of the terrain edge over the blend band.
 	};
 
 	inline bool bEnabled = true;
@@ -26,9 +27,10 @@ namespace Settings {
 	inline float fMaxDistance = 4096.0f; // Game units, ~58 m
 	inline float fBlendRange = 48.0f; // Game units along the surface, ~70 cm
 	inline float fBlendClimbHeight = 12.0f; // Game units above the terrain, ~17 cm
-	inline bool bHardEdge = true; // Off: the overlay fades out over the blend range.
-	inline float fEdgeHeightInfluence = 0.5f; // 0-2, how far the material height moves the terrain edge
-	inline float fEdgeNoise = 0.25f; // 0-1, how far grain noise moves the terrain edge and the topper crop
+	inline float fEdgeSoftness = 0.5f; // 0-1, width of the terrain fade in blend amount. 1 fades over the whole range.
+	inline float fEdgeFeatureStrength = 0.75f; // 0-2, how far texture features shift the terrain edge
+	inline float fEdgeFeatureSize = 12.0f; // Game units, ~17 cm. Blur of the height that the features stand out from.
+	inline float fEdgeNoise = 0.25f; // 0-1, how far grain noise moves the topper crop
 	inline float fEdgeGrainSize = 4.0f; // Game units, ~6 cm
 	inline float fCropHeight = 6.0f; // Game units above the floor, ~9 cm. 0 turns the crop off.
 	inline std::vector<uint8_t> kBlendTypesTerrainToStatic; // Base form type IDs

@@ -293,14 +293,14 @@ namespace OverlayPass {
 		const TerrainPasses::PassFilter kInRange = [&kEye, &kViewDirection, fMaxBlockDepth](const NiGeometry* apGeometry) {
 			return IsBlockInRange(apGeometry, kEye, kViewDirection, fMaxBlockDepth);
 		};
-		// c89: debug mode and hard edge.
+		// c89: debug mode and edge shape.
 		// c92-c93: block index and eye in block model space, set per pass.
 		// c94-c96: eye-relative world position to the fog position the terrain shaders build from the clip position:
 		// clip x, clip y, w - z. The renderer works relative to the camera. The scene's view projection takes these positions.
-		// c97: edge grain size and blend range.
+		// c97: edge feature size and blend range.
 		const D3DXMATRIX& rVP = arViewProjection;
 		const float fConstants[OVERLAY_CONSTANT_COUNT][4] = {
-			{ static_cast<float>(Settings::eDebugMode), Settings::bHardEdge ? 1.0f : 0.0f, Settings::fEdgeHeightInfluence, Settings::fEdgeNoise },
+			{ static_cast<float>(Settings::eDebugMode), Settings::fEdgeSoftness, Settings::fEdgeFeatureStrength, 0.0f },
 			{ kEye.x, kEye.y, kEye.z, 0.0f },
 			{ 1.0f / kViewport.Width, 1.0f / kViewport.Height, 0.0f, 0.0f },
 			{ 0.0f, 0.0f, 0.0f, 0.0f },
@@ -308,7 +308,7 @@ namespace OverlayPass {
 			{ rVP._11, rVP._21, rVP._31, rVP._41 },
 			{ rVP._12, rVP._22, rVP._32, rVP._42 },
 			{ rVP._14 - rVP._13, rVP._24 - rVP._23, rVP._34 - rVP._33, rVP._44 - rVP._43 },
-			{ Settings::fEdgeGrainSize, Settings::fBlendRange, 0.0f, 0.0f },
+			{ Settings::fEdgeFeatureSize, Settings::fBlendRange, 0.0f, 0.0f },
 		};
 		apDevice->SetPixelShaderConstantF(OVERLAY_CONSTANT_REGISTER, fConstants[0], OVERLAY_CONSTANT_COUNT);
 

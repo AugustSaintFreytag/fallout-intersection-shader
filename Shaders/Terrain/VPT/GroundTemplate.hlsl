@@ -105,15 +105,13 @@ PS_OUTPUT main(PS_INPUT IN) {
     float3 finalColor = lighting;
     finalColor = lerp(finalColor, fog.rgb, fog.a); // Apply fog.
 
-    if (IsOverlayMaskDebug())
+    if (IsEdgeFeatureDebug())
+        finalColor = 0.5f;
+    else if (IsOverlayMaskDebug())
         finalColor = GetBlockColor(IBBlock.xy);
 
-    float noHeight[7] = { 0, 0, 0, 0, 0, 0, 0 }; // Vanilla Plus Terrain has no height maps. The hard edge uses luma.
-    float materialHeight = 0.5f;
-    [branch] if (IBOverlayParams.y > 0.5f)
-        materialHeight = GetMaterialHeight(ground.uv, dx, dy, texCount, BaseMap, blends, noHeight);
-
-    OUT.color_0.a = GetOverlayAlpha(ground, materialHeight);
+    // Vanilla Plus Terrain has no height maps. The edge is the plain soft fade.
+    OUT.color_0.a = IsEdgeFeatureDebug() ? ground.distanceFade : GetOverlayAlpha(ground, 0.0f);
     OUT.color_0.rgb = finalColor;
 
     return OUT;

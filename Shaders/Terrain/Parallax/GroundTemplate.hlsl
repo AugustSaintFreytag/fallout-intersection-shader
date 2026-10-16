@@ -113,14 +113,16 @@ PS_OUTPUT main(PS_INPUT IN) {
     float3 finalColor = lighting;
     finalColor = lerp(finalColor, fog.rgb, fog.a); // Apply fog.
 
-    if (IsOverlayMaskDebug())
+    float features = 0.0f;
+    [branch] if (IBOverlayParams.z > 0.0f || IsEdgeFeatureDebug())
+        features = GetEdgeFeatures(offsetUV, dx, dy, texCount, BaseMap, weights, heightStatus);
+
+    if (IsEdgeFeatureDebug())
+        finalColor = features * 0.5f + 0.5f;
+    else if (IsOverlayMaskDebug())
         finalColor = GetBlockColor(IBBlock.xy);
 
-    float materialHeight = 0.5f;
-    [branch] if (IBOverlayParams.y > 0.5f)
-        materialHeight = GetMaterialHeight(offsetUV, dx, dy, texCount, BaseMap, weights, heightStatus);
-
-    OUT.color_0.a = GetOverlayAlpha(ground, materialHeight);
+    OUT.color_0.a = IsEdgeFeatureDebug() ? ground.distanceFade : GetOverlayAlpha(ground, features);
     OUT.color_0.rgb = finalColor;
 
     return OUT;
