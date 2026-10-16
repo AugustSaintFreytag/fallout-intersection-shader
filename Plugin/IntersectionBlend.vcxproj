@@ -172,7 +172,7 @@ copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVS
     <ClCompile Include="External\Game\Gamebryo\NiTexture.cpp" />
     <ClCompile Include="External\Misc\BSD3DTexture.cpp" />
     <ClCompile Include="Source\main.cpp" />
-    <ClCompile Include="Source\BlendToggle.cpp" />
+    <ClCompile Include="Source\Hotkeys.cpp" />
     <ClCompile Include="Source\Dependencies.cpp" />
     <ClCompile Include="Source\DrawRedirect.cpp" />
     <ClCompile Include="Source\GroundBuffer.cpp" />
@@ -187,7 +187,7 @@ copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVS
     <ClCompile Include="Source\TopperPasses.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Source\BlendToggle.hpp" />
+    <ClInclude Include="Source\Hotkeys.hpp" />
     <ClInclude Include="Source\Dependencies.hpp" />
     <ClInclude Include="Source\DrawRedirect.hpp" />
     <ClInclude Include="Source\GroundBuffer.hpp" />

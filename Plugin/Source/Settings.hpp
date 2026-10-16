@@ -20,11 +20,16 @@ namespace Settings {
 	};
 
 	inline bool bEnabled = true;
-	inline uint32_t uiToggleKey = 121; // Windows virtual-key code, 121 = F10. 0 turns the toggle off.
+	inline uint32_t uiToggleKey = 121; // Windows virtual-key code, 121 = F10. 0 turns the key off.
+	inline uint32_t uiReloadKey = 122; // Windows virtual-key code, 122 = F11. 0 turns the key off.
 	inline bool bUnrolledMapping = true; // Off: the blend samples the terrain straight under the surface.
 	inline float fMaxDistance = 4096.0f; // Game units, ~58 m
 	inline float fBlendRange = 48.0f; // Game units along the surface, ~70 cm
 	inline float fBlendRangeOrthoFactor = 0.5f; // 0-1, factor on `fBlendRange` for faces orthogonal to the terrain
+	inline bool bHardEdge = true; // Off: the overlay fades out over the blend range.
+	inline float fEdgeHeightInfluence = 0.5f; // 0-2, how far the material height moves the hard edge
+	inline float fEdgeNoise = 0.25f; // 0-1, how far world-space noise moves the hard edge
+	inline float fEdgeNoiseScale = 24.0f; // Game units, size of the edge noise features
 	inline float fCropHeight = 6.0f; // Game units above the floor, ~9 cm. 0 turns the crop off.
 	inline float fCropScale = 8.0f; // Game units, size of the crop noise features
 	inline std::vector<uint8_t> kBlendTypesTerrainToStatic; // Base form type IDs
@@ -35,5 +40,6 @@ namespace Settings {
 	inline bool bDeferToppers = true; // Off: toppers draw in the opaque stage.
 
 	void Load();
+	void LoadLive();
 
 }

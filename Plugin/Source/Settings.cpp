@@ -87,26 +87,41 @@ namespace Settings {
 		return kEntries;
 	}
 
+	// Reads the settings that take effect from the next frame on. The reload key calls it again in game.
+	void LoadLive() {
+		bUnrolledMapping = GetUInt("Blend", "bUnrolledMapping", bUnrolledMapping) != 0;
+		fBlendRange = std::max(GetFloat("Blend", "fBlendRange", fBlendRange), 1.0f);
+		fBlendRangeOrthoFactor = std::clamp(GetFloat("Blend", "fBlendRangeOrthoFactor", fBlendRangeOrthoFactor), 0.0f, 1.0f);
+		bHardEdge = GetUInt("Blend", "bHardEdge", bHardEdge) != 0;
+		fEdgeHeightInfluence = std::clamp(GetFloat("Blend", "fEdgeHeightInfluence", fEdgeHeightInfluence), 0.0f, 2.0f);
+		fEdgeNoise = std::clamp(GetFloat("Blend", "fEdgeNoise", fEdgeNoise), 0.0f, 1.0f);
+		fEdgeNoiseScale = std::max(GetFloat("Blend", "fEdgeNoiseScale", fEdgeNoiseScale), 1.0f);
+		fCropHeight = GetFloat("StaticBlend", "fCropHeight", fCropHeight);
+		fCropScale = std::max(GetFloat("StaticBlend", "fCropScale", fCropScale), 1.0f);
+		eDebugMode = static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
+
+		_MESSAGE("Settings: Unrolled mapping %u, blend range %.1f, ortho factor %.2f, hard edge %u (height influence %.2f, noise %.2f, noise scale %.1f), crop height %.1f, crop scale %.1f, debug mode %u",
+			bUnrolledMapping, fBlendRange, fBlendRangeOrthoFactor, bHardEdge, fEdgeHeightInfluence, fEdgeNoise, fEdgeNoiseScale, fCropHeight, fCropScale, eDebugMode);
+	}
+
 	// Reads `IntersectionBlend.ini` and the form lists in `IntersectionBlendForms.ini`. Missing keys keep their defaults.
+	// The settings outside `LoadLive` are read once at startup.
 	void Load() {
 		bEnabled = GetUInt("Main", "bEnabled", bEnabled) != 0;
 		uiToggleKey = GetUInt("Main", "iToggleKey", uiToggleKey);
-		bUnrolledMapping = GetUInt("Blend", "bUnrolledMapping", bUnrolledMapping) != 0;
+		uiReloadKey = GetUInt("Main", "iReloadKey", uiReloadKey);
 		fMaxDistance = GetFloat("Blend", "fMaxDistance", fMaxDistance);
-		fBlendRange = GetFloat("Blend", "fBlendRange", fBlendRange);
-		fBlendRangeOrthoFactor = std::clamp(GetFloat("Blend", "fBlendRangeOrthoFactor", fBlendRangeOrthoFactor), 0.0f, 1.0f);
 		kBlendTypesTerrainToStatic = ParseFormTypes(GetString("Blend", "sBlendTypesTerrainToStatic", "STAT, SCOL"));
-		fCropHeight = GetFloat("StaticBlend", "fCropHeight", fCropHeight);
-		fCropScale = std::max(GetFloat("StaticBlend", "fCropScale", fCropScale), 1.0f);
 		kTerrainToStaticBlacklist = GetEditorIDList("TerrainToStaticBlacklist");
 		kStaticToStaticWhitelist = GetEditorIDList("StaticToStaticWhitelist");
-		eDebugMode = static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
 		bProfile = GetUInt("Debug", "bProfile", bProfile) != 0;
 		bDeferToppers = GetUInt("Debug", "bDeferToppers", bDeferToppers) != 0;
 
-		_MESSAGE("Settings: Enabled %u, toggle key %u, unrolled mapping %u, max distance %.1f, blend range %.1f, ortho factor %.2f, %u terrain blend types, %u blacklist entries, %u toppers, debug mode %u, profile %u",
-			bEnabled, uiToggleKey, bUnrolledMapping, fMaxDistance, fBlendRange, fBlendRangeOrthoFactor, static_cast<uint32_t>(kBlendTypesTerrainToStatic.size()), static_cast<uint32_t>(kTerrainToStaticBlacklist.size()),
-			static_cast<uint32_t>(kStaticToStaticWhitelist.size()), eDebugMode, bProfile);
+		_MESSAGE("Settings: Enabled %u, toggle key %u, reload key %u, max distance %.1f, %u terrain blend types, %u blacklist entries, %u toppers, profile %u, defer toppers %u",
+			bEnabled, uiToggleKey, uiReloadKey, fMaxDistance, static_cast<uint32_t>(kBlendTypesTerrainToStatic.size()), static_cast<uint32_t>(kTerrainToStaticBlacklist.size()),
+			static_cast<uint32_t>(kStaticToStaticWhitelist.size()), bProfile, bDeferToppers);
+
+		LoadLive();
 	}
 
 }

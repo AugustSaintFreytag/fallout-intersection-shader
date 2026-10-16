@@ -1,10 +1,10 @@
 #include "OverlayPass.hpp"
 
-#include "BlendToggle.hpp"
 #include "Dependencies.hpp"
 #include "DrawRedirect.hpp"
 #include "GroundBuffer.hpp"
 #include "GroundShaders.hpp"
+#include "Hotkeys.hpp"
 #include "Profiler.hpp"
 #include "RenderStates.hpp"
 #include "Settings.hpp"
@@ -541,7 +541,7 @@ namespace OverlayPass {
 
 		// Without tags from this frame, the stencil buffer holds nothing for the overlay to test against.
 		const bool bTagged = StencilTags::HasTags(apTarget);
-		const bool bOverlay = bOverlayReady && bTagged && BlendToggle::IsActive();
+		const bool bOverlay = bOverlayReady && bTagged && Hotkeys::IsBlendActive();
 
 		// Copy the scene camera's matrices before the ground buffer pass changes them.
 		NiDX9Renderer* pRenderer = NiDX9Renderer::GetSingleton();
