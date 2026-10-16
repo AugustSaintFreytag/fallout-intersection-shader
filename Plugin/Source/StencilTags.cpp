@@ -12,6 +12,7 @@
 
 #include <algorithm>
 #include <memory>
+#include <string>
 #include <unordered_set>
 #include <utility>
 
@@ -75,6 +76,12 @@ namespace StencilTags {
 	static NiPoint3								kEye;
 	static NiPoint3								kViewDirection;
 
+	// Untagged Geometry Log
+	// Debug mode 3 logs why geometry gets no `TERRAIN_BLEND_BIT`, once per object.
+	static constexpr uint32_t					MAX_UNTAGGED_LINES	= 200;
+	static constexpr uint32_t					FORM_GET_EDITOR_ID	= 0x130;	// Vtable offset of `TESForm::GetEditorID`
+	static std::unordered_set<std::string>		kLoggedUntagged;
+
 	// Geometry verdicts since the last `ConsumeCounts`
 	static uint32_t								uiTaggedGeometry	= 0;
 	static uint32_t								uiTopperGeometry	= 0;
@@ -110,11 +117,44 @@ namespace StencilTags {
 		return fDepth - pBound->m_fRadius <= Settings::fMaxDistance;
 	}
 
+	// Returns the editor ID of a given form, or an empty string. IDs may not be available without JohnnyGuitar NVSE.
+	static const char* GetEditorID(const void* apForm) {
+		const uint32_t uiFunction = (*reinterpret_cast<const uint32_t* const*>(apForm))[FORM_GET_EDITOR_ID / 4];
+		const char* pEditorID = ThisCall<const char*>(uiFunction, apForm);
+		return pEditorID ? pEditorID : "";
+	}
+
+	// Logs why the given geometry gets no `TERRAIN_BLEND_BIT`, once per base form, or per scene root without a reference.
+	// Debug mode 3 only.
+	static void LogUntagged(const NiGeometry* apGeometry, const void* apBaseForm, const char* apReason) {
+		if (Settings::eDebugMode != Settings::DEBUG_STENCIL_TAGS || kLoggedUntagged.size() >= MAX_UNTAGGED_LINES)
+			return;
+
+		if (apBaseForm) {
+			char cKey[16];
+			sprintf_s(cKey, "%08X", Field<uint32_t>(apBaseForm, FORM_REF_ID));
+			if (!kLoggedUntagged.insert(cKey).second)
+				return;
+			_MESSAGE("Untagged: %s %s, form type %u: %s", cKey, GetEditorID(apBaseForm), Field<uint8_t>(apBaseForm, FORM_TYPE_ID), apReason);
+			return;
+		}
+
+		const NiAVObject* pRoot = apGeometry;
+		for (uint32_t uiDepth = 0; pRoot->m_pkParent && uiDepth < MAX_PARENT_DEPTH; uiDepth++)
+			pRoot = pRoot->m_pkParent;
+		const char* pRootName = pRoot->GetName() ? pRoot->GetName() : "";
+		if (!kLoggedUntagged.insert(std::string("root ") + pRootName).second)
+			return;
+		_MESSAGE("Untagged: geometry \"%s\" under root \"%s\": %s", apGeometry->GetName() ? apGeometry->GetName() : "", pRootName, apReason);
+	}
+
 	// Returns the tag bits for the reference that owns the given geometry, 0 if it gets none.
 	static uint32_t GetTags(const NiGeometry* apGeometry) {
 		const void* pReference = GetParentReference(apGeometry);
-		if (!pReference)
+		if (!pReference) {
+			LogUntagged(apGeometry, nullptr, "no BSFadeNode with a reference above it");
 			return 0;
+		}
 
 		const void* pBaseForm = Field<const void*>(pReference, REFR_BASE_FORM);
 		if (!pBaseForm)
@@ -122,7 +162,11 @@ namespace StencilTags {
 
 		const uint32_t uiFormID = Field<uint32_t>(pBaseForm, FORM_REF_ID);
 		uint32_t uiTags = 0;
-		if (bTypeEligible[Field<uint8_t>(pBaseForm, FORM_TYPE_ID)] && !kBlacklist.contains(uiFormID))
+		if (!bTypeEligible[Field<uint8_t>(pBaseForm, FORM_TYPE_ID)])
+			LogUntagged(apGeometry, pBaseForm, "form type not in sTerrainBlendTypes");
+		else if (kBlacklist.contains(uiFormID))
+			LogUntagged(apGeometry, pBaseForm, "blacklisted");
+		else
 			uiTags |= TERRAIN_BLEND_BIT;
 		if (kToppers.contains(uiFormID))
 			uiTags |= TOPPER_BIT;
