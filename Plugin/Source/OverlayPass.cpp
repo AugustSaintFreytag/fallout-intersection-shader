@@ -297,7 +297,7 @@ namespace OverlayPass {
 		// c92-c93: block index and eye in block model space, set per pass.
 		// c94-c96: eye-relative world position to the fog position the terrain shaders build from the clip position:
 		// clip x, clip y, w - z. The renderer works relative to the camera. The scene's view projection takes these positions.
-		// c97: edge noise feature size and blend range.
+		// c97: edge noise feature size, blend range and edge softness.
 		const D3DXMATRIX& rVP = arViewProjection;
 		const float fConstants[OVERLAY_CONSTANT_COUNT][4] = {
 			{ static_cast<float>(Settings::eDebugMode), Settings::bHardEdge ? 1.0f : 0.0f, Settings::fEdgeHeightInfluence, Settings::fEdgeNoise },
@@ -308,7 +308,7 @@ namespace OverlayPass {
 			{ rVP._11, rVP._21, rVP._31, rVP._41 },
 			{ rVP._12, rVP._22, rVP._32, rVP._42 },
 			{ rVP._14 - rVP._13, rVP._24 - rVP._23, rVP._34 - rVP._33, rVP._44 - rVP._43 },
-			{ Settings::fEdgeNoiseScale, Settings::fBlendRange, 0.0f, 0.0f },
+			{ Settings::fEdgeNoiseScale, Settings::fBlendRange, Settings::fEdgeSoftness, 0.0f },
 		};
 		apDevice->SetPixelShaderConstantF(OVERLAY_CONSTANT_REGISTER, fConstants[0], OVERLAY_CONSTANT_COUNT);
 

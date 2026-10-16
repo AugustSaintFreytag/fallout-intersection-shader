@@ -91,17 +91,18 @@ namespace Settings {
 	void LoadLive() {
 		bUnrolledMapping = GetUInt("Blend", "bUnrolledMapping", bUnrolledMapping) != 0;
 		fBlendRange = std::max(GetFloat("Blend", "fBlendRange", fBlendRange), 1.0f);
-		fBlendRangeOrthoFactor = std::clamp(GetFloat("Blend", "fBlendRangeOrthoFactor", fBlendRangeOrthoFactor), 0.0f, 1.0f);
+		fBlendClimbHeight = std::max(GetFloat("Blend", "fBlendClimbHeight", fBlendClimbHeight), 1.0f);
 		bHardEdge = GetUInt("Blend", "bHardEdge", bHardEdge) != 0;
 		fEdgeHeightInfluence = std::clamp(GetFloat("Blend", "fEdgeHeightInfluence", fEdgeHeightInfluence), 0.0f, 2.0f);
 		fEdgeNoise = std::clamp(GetFloat("Blend", "fEdgeNoise", fEdgeNoise), 0.0f, 1.0f);
 		fEdgeNoiseScale = std::max(GetFloat("Blend", "fEdgeNoiseScale", fEdgeNoiseScale), 1.0f);
+		fEdgeSoftness = std::clamp(GetFloat("Blend", "fEdgeSoftness", fEdgeSoftness), 0.0f, 1.0f);
 		fCropHeight = GetFloat("StaticBlend", "fCropHeight", fCropHeight);
 		fCropScale = std::max(GetFloat("StaticBlend", "fCropScale", fCropScale), 1.0f);
 		eDebugMode = static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
 
-		_MESSAGE("Settings: Unrolled mapping %u, blend range %.1f, ortho factor %.2f, hard edge %u (height influence %.2f, noise %.2f, noise scale %.1f), crop height %.1f, crop scale %.1f, debug mode %u",
-			bUnrolledMapping, fBlendRange, fBlendRangeOrthoFactor, bHardEdge, fEdgeHeightInfluence, fEdgeNoise, fEdgeNoiseScale, fCropHeight, fCropScale, eDebugMode);
+		_MESSAGE("Settings: Unrolled mapping %u, blend range %.1f, climb height %.1f, hard edge %u (height influence %.2f, noise %.2f, noise scale %.1f, softness %.2f), crop height %.1f, crop scale %.1f, debug mode %u",
+			bUnrolledMapping, fBlendRange, fBlendClimbHeight, bHardEdge, fEdgeHeightInfluence, fEdgeNoise, fEdgeNoiseScale, fEdgeSoftness, fCropHeight, fCropScale, eDebugMode);
 	}
 
 	// Reads `IntersectionBlend.ini` and the form lists in `IntersectionBlendForms.ini`. Missing keys keep their defaults.

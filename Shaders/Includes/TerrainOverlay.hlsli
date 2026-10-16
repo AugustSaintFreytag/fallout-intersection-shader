@@ -18,7 +18,7 @@ float4 IBScreenParams : register(c91);  // x = 1 / width, y = 1 / height
 float4 IBBlock : register(c92);         // xy = grid index of the landscape block being drawn
 float4 IBModelEye : register(c93);      // xyz = camera position in the block's model space
 float4 IBFogRows[3] : register(c94);    // Eye-relative world position to the fog position (clip x, y, w - z)
-float4 IBEdgeParams : register(c97);    // x = edge noise feature size, y = blend range
+float4 IBEdgeParams : register(c97);    // x = edge noise feature size, y = blend range, z = edge softness
 
 // Written by the ground buffer pass: ground points (s14) and their packed attributes (s15).
 //
@@ -162,7 +162,8 @@ float GetMaterialHeight(float2 uv, float2 dx, float2 dy, int texCount, sampler2D
 //
 // With the hard edge, the material is present where the blend amount exceeds 1 minus its reach. The reach rises with
 // the material height and world-space noise. High spots of the texture reach further up the static and low spots drop
-// out first. The edge is antialiased over about a pixel, from the pixel footprint of the ground point.
+// out first. The edge is antialiased over about a pixel, from the pixel footprint of the ground point. The edge
+// softness widens it, in blend amount.
 // Without the hard edge, the blend amount is the opacity.
 float GetOverlayAlpha(GroundSample ground, float materialHeight) {
     [branch] if (IBOverlayParams.y < 0.5f)
@@ -173,6 +174,6 @@ float GetOverlayAlpha(GroundSample ground, float materialHeight) {
     float reach = clamp(0.5f + IBOverlayParams.z * (materialHeight - 0.5f) + IBOverlayParams.w * noise, MinEdgeReach, 1.0f);
 
     float footprint = max(length(ground.uvDx), length(ground.uvDy)) * TerrainUVScale;
-    float width = max(footprint * EdgeAntialiasSlope / IBEdgeParams.y, MinEdgeWidth);
+    float width = max(footprint * EdgeAntialiasSlope / IBEdgeParams.y, max(IBEdgeParams.z, MinEdgeWidth));
     return saturate((ground.amount + reach - 1.0f) / width) * ground.distanceFade;
 }

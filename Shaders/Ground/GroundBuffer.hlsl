@@ -52,7 +52,7 @@ float4 ScreenParams : register(c14);            // x, y = screen texel size
 float4 GroundParams : register(c15);            // x = 1 for the height layout (debug mode 4), y = blend range,
                                                 // z = 1 for unrolled mapping, w = 1 for the raw attributes (debug mode 7)
 float4 EyePosition : register(c16);             // xyz = camera position in world space
-float4 BlendParams : register(c17);             // x = blend range factor on faces orthogonal to the terrain
+float4 BlendParams : register(c17);             // x = climb height
 
 static const float NO_GROUND = 1.0e9f;
 

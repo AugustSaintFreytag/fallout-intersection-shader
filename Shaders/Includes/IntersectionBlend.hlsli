@@ -24,9 +24,9 @@ float GetDistanceFade(float sceneDepth, float maxDistance) {
 // by an angle, that distance is the height over the sine of the angle. Flat statics resting on the ground, such as
 // slabs, lie their thickness above it and nearly parallel. Their distance to a contact line is far beyond the range.
 //
-// The ortho factor scales the blend range on faces at right angles to the terrain. Faces parallel to the terrain get
-// the full range. In between, the range follows the cosine of the tilt.
-float IntersectionBlendFactor(float height, float3 groundNormal, float3 surfaceNormal, float blendRange, float orthoFactor) {
+// The climb height caps the height above the terrain that blends. Steep faces, such as poles and curbs, blend up to
+// the smaller of the two. Near-flat faces keep the full blend range along the surface.
+float IntersectionBlendFactor(float height, float3 groundNormal, float3 surfaceNormal, float blendRange, float climbHeight) {
     // Contact line. The overlay only draws on samples of tagged statics. This is never terrain over terrain.
     if (abs(height) < SelfHeight)
         return 1.0f;
@@ -37,8 +37,9 @@ float IntersectionBlendFactor(float height, float3 groundNormal, float3 surfaceN
     float tiltCosine = dot(surfaceNormal, groundNormal);
     float tiltSine = sqrt(saturate(1.0f - tiltCosine * tiltCosine));
     float contactDistance = height / max(tiltSine, MinTiltSine);
-    float tiltRange = max(blendRange * lerp(orthoFactor, 1.0f, abs(tiltCosine)), SelfHeight + MinBlendRange);
-    return 1.0f - smoothstep(SelfHeight, tiltRange, contactDistance);
+    float surfaceFade = 1.0f - smoothstep(SelfHeight, max(blendRange, SelfHeight + MinBlendRange), contactDistance);
+    float climbFade = 1.0f - smoothstep(SelfHeight, max(climbHeight, SelfHeight + MinBlendRange), height);
+    return min(surfaceFade, climbFade);
 }
 
 // Size of a landscape block, a quarter of a cell. Blocks lie on a world-aligned grid.
