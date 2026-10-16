@@ -60,24 +60,34 @@ struct PS_OUTPUT {
     float depth : DEPTH;
 };
 
-// Returns the debug mode 10 colour of a crop candidate: red cropped, green floor above the threshold, blue not a floor,
-// yellow equal depths.
+// Returns the debug mode 10 colour of a crop candidate: red cropped, yellow equal depths, blue not a floor, green floor
+// above the threshold.
 float4 GetCauseColor(bool equalDepths, bool isFloor, bool cropped) {
+    if (cropped)
+        return float4(1.0f, 0.0f, 0.0f, 1.0f);
     if (equalDepths)
         return float4(1.0f, 1.0f, 0.0f, 1.0f);
-    if (!isFloor)
-        return float4(0.0f, 0.0f, 1.0f, 1.0f);
-    return cropped ? float4(1.0f, 0.0f, 0.0f, 1.0f) : float4(0.0f, 1.0f, 0.0f, 1.0f);
+    return isFloor ? float4(0.0f, 1.0f, 0.0f, 1.0f) : float4(0.0f, 0.0f, 1.0f, 1.0f);
+}
+
+// Height that stands for no topper in front of the base.
+static const float NoTopperHeight = 1.0e9f;
+
+// Returns the height of the topper at a pixel above a base plane, or `NoTopperHeight` where no topper lies in front of
+// the base. Clears the flag if the pixel has no topper.
+float GetTopperHeight(float2 pixel, float3 base, float3 normal, inout bool allToppers) {
+    float baseDepth = SampleDepth(BaseDepth, pixel);
+    float topperDepth = SampleDepth(SceneDepth, pixel);
+    bool hasTopper = topperDepth != baseDepth;
+    allToppers = allToppers && hasTopper;
+    return hasTopper ? dot(GetPosition(pixel, topperDepth) - base, normal) : NoTopperHeight;
 }
 
 PS_OUTPUT main(float2 vpos : VPOS) {
-    // Both depths are resolved from the first sample. At a topper silhouette that sample can lie on the base.
-    // The depths are then equal, and the topper samples of the pixel are not measured.
     float baseDepth = SampleDepth(BaseDepth, vpos);
     float topperDepth = SampleDepth(SceneDepth, vpos);
     bool debugCause = CropParams.z > 0.5f;
     bool equalDepths = topperDepth == baseDepth;
-    clip(!equalDepths || debugCause ? 1.0f : -1.0f);
 
     float3 base = GetPosition(vpos, baseDepth);
     float3 topper = GetPosition(vpos, topperDepth);
@@ -88,12 +98,25 @@ PS_OUTPUT main(float2 vpos : VPOS) {
     float3 normal = normalize(cross(baseDx, baseDy));
     normal *= dot(normal, base) > 0.0f ? -1.0f : 1.0f;
 
-    float height = dot(topper - base, normal);
+    // Both depths are resolved from one sample. On the outline of a topper, that sample can lie on the base, and the
+    // depths are equal. At grazing angles, the two depths of an outline pixel also come from spots that lie units apart
+    // in depth. Outline pixels take the lowest height of their own and their topper neighbours. At the contact line the
+    // neighbours inside the topper are low and the outline is cropped. At a silhouette high above the floor they are
+    // high and the outline stays.
+    float height = equalDepths ? NoTopperHeight : dot(topper - base, normal);
+    bool allToppers = !equalDepths;
+    float neighbourHeight = GetTopperHeight(vpos + float2(1.0f, 0.0f), base, normal, allToppers);
+    neighbourHeight = min(neighbourHeight, GetTopperHeight(vpos - float2(1.0f, 0.0f), base, normal, allToppers));
+    neighbourHeight = min(neighbourHeight, GetTopperHeight(vpos + float2(0.0f, 1.0f), base, normal, allToppers));
+    neighbourHeight = min(neighbourHeight, GetTopperHeight(vpos - float2(0.0f, 1.0f), base, normal, allToppers));
+    if (!allToppers)
+        height = min(height, neighbourHeight);
+
     // The same edge as the terrain overlay, with the blend amount 1 - height / crop height. Toppers have no material
     // height here. Their colour is drawn after the crop.
     float threshold = CropParams.x * GetEdgeReach(EyePosition.xy + topper.xy, 0.5f, 0.0f, CropParams.w, CropParams.y);
     bool isFloor = normal.z >= FloorNormalZ;
-    bool cropped = !equalDepths && isFloor && height < threshold;
+    bool cropped = isFloor && height < threshold;
     clip(cropped || debugCause ? 1.0f : -1.0f);
 
     // In debug mode 10 every candidate loses the topper bit. Pixels that are not cropped keep the topper depth.
