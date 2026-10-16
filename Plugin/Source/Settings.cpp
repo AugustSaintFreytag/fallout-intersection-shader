@@ -93,11 +93,10 @@ namespace Settings {
 		bUnrolledMapping		= GetUInt("Blend", "bUnrolledMapping", bUnrolledMapping) != 0;
 		fMaxDistance			= GetFloat("Blend", "fMaxDistance", fMaxDistance);
 		fBlendRange				= GetFloat("Blend", "fBlendRange", fBlendRange);
-		// Capped at 1. The scissor margin of the overlay only covers `fBlendRange`.
 		fBlendRangeOrthoFactor	= std::clamp(GetFloat("Blend", "fBlendRangeOrthoFactor", fBlendRangeOrthoFactor), 0.0f, 1.0f);
+		kBlendTypesTerrainToStatic		= ParseFormTypes(GetString("Blend", "sBlendTypesTerrainToStatic", "STAT, SCOL"));
 		fCropHeight				= GetFloat("StaticBlend", "fCropHeight", fCropHeight);
 		fCropScale				= std::max(GetFloat("StaticBlend", "fCropScale", fCropScale), 1.0f);
-		kTerrainBlendTypes		= ParseFormTypes(GetString("Selection", "sTerrainBlendTypes", "STAT, SCOL"));
 		kTerrainToStaticBlacklist	= GetEditorIDList("TerrainToStaticBlacklist");
 		kStaticToStaticWhitelist	= GetEditorIDList("StaticToStaticWhitelist");
 		eDebugMode				= static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
@@ -105,7 +104,7 @@ namespace Settings {
 		bDeferToppers			= GetUInt("Debug", "bDeferToppers", bDeferToppers) != 0;
 
 		_MESSAGE("Settings: enabled %u, unrolled mapping %u, max distance %.1f, blend range %.1f, ortho factor %.2f, %u terrain blend types, %u blacklist entries, %u toppers, debug mode %u, profile %u",
-			bEnabled, bUnrolledMapping, fMaxDistance, fBlendRange, fBlendRangeOrthoFactor, static_cast<uint32_t>(kTerrainBlendTypes.size()), static_cast<uint32_t>(kTerrainToStaticBlacklist.size()),
+			bEnabled, bUnrolledMapping, fMaxDistance, fBlendRange, fBlendRangeOrthoFactor, static_cast<uint32_t>(kBlendTypesTerrainToStatic.size()), static_cast<uint32_t>(kTerrainToStaticBlacklist.size()),
 			static_cast<uint32_t>(kStaticToStaticWhitelist.size()), eDebugMode, bProfile);
 	}
 

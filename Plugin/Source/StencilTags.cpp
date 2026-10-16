@@ -191,13 +191,13 @@ namespace StencilTags {
 	// Call once the game data is loaded, at NVSE DeferredInit.
 	void LoadSelection() {
 		std::fill(std::begin(bTypeEligible), std::end(bTypeEligible), false);
-		for (uint8_t ucType : Settings::kTerrainBlendTypes)
+		for (uint8_t ucType : Settings::kBlendTypesTerrainToStatic)
 			bTypeEligible[ucType] = true;
 
 		kBlacklist	= ResolveEditorIDs(Settings::kTerrainToStaticBlacklist, "Terrain-to-static blacklist");
 		kToppers	= ResolveEditorIDs(Settings::kStaticToStaticWhitelist, "Static-to-static whitelist");
 
-		_MESSAGE("Terrain blend selection: %u form types, %u of %u blacklisted base forms found", static_cast<uint32_t>(Settings::kTerrainBlendTypes.size()),
+		_MESSAGE("Terrain blend selection: %u form types, %u of %u blacklisted base forms found", static_cast<uint32_t>(Settings::kBlendTypesTerrainToStatic.size()),
 			static_cast<uint32_t>(kBlacklist.size()), static_cast<uint32_t>(Settings::kTerrainToStaticBlacklist.size()));
 		_MESSAGE("Static blend selection: %u of %u toppers found", static_cast<uint32_t>(kToppers.size()), static_cast<uint32_t>(Settings::kStaticToStaticWhitelist.size()));
 	}

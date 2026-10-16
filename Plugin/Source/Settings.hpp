@@ -26,7 +26,7 @@ namespace Settings {
 	inline float					fBlendRangeOrthoFactor	= 0.5f;		// 0-1, factor on `fBlendRange` for faces orthogonal to the terrain
 	inline float					fCropHeight				= 6.0f;		// Game units above the floor, ~9 cm. 0 turns the crop off.
 	inline float					fCropScale				= 8.0f;		// Game units, size of the crop noise features
-	inline std::vector<uint8_t>		kTerrainBlendTypes;					// Base form type IDs
+	inline std::vector<uint8_t>		kBlendTypesTerrainToStatic;					// Base form type IDs
 	inline std::vector<std::string>	kTerrainToStaticBlacklist;			// Editor IDs of base forms
 	inline std::vector<std::string>	kStaticToStaticWhitelist;			// Editor IDs of base forms, the toppers
 	inline DebugMode				eDebugMode				= DEBUG_NONE;
