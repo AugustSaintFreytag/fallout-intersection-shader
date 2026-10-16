@@ -8,4 +8,6 @@ Plugin/Release
 Plugin/Packages
 Build/
 
+deploy-path.txt
+
 *.code-workspace
