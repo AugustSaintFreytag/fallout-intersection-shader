@@ -1,5 +1,6 @@
 #include "TopperCrop.hpp"
 
+#include "BlendToggle.hpp"
 #include "Dependencies.hpp"
 #include "Settings.hpp"
 #include "StencilTags.hpp"
@@ -157,7 +158,7 @@ namespace TopperCrop {
 	// Copies the given scene depth into the base depth target. Returns false if the crop is unavailable.
 	// Call before the depth replay of the toppers, while the scene depth does not hold them.
 	bool CopyBaseDepth(IDirect3DDevice9* apDevice, IDirect3DBaseTexture9* apDepthTexture) {
-		if (!bReady || !apDepthTexture || Settings::fCropHeight <= 0.0f || !CreateResources(apDevice, apDepthTexture))
+		if (!bReady || !BlendToggle::IsActive() || !apDepthTexture || Settings::fCropHeight <= 0.0f || !CreateResources(apDevice, apDepthTexture))
 			return false;
 
 		IDirect3DSurface9* pSavedTarget = nullptr;

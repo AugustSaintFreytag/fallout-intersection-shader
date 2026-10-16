@@ -90,6 +90,7 @@ namespace Settings {
 	// Reads `IntersectionBlend.ini` and the form lists in `IntersectionBlendForms.ini`. Missing keys keep their defaults.
 	void Load() {
 		bEnabled = GetUInt("Main", "bEnabled", bEnabled) != 0;
+		uiToggleKey = GetUInt("Main", "iToggleKey", uiToggleKey);
 		bUnrolledMapping = GetUInt("Blend", "bUnrolledMapping", bUnrolledMapping) != 0;
 		fMaxDistance = GetFloat("Blend", "fMaxDistance", fMaxDistance);
 		fBlendRange = GetFloat("Blend", "fBlendRange", fBlendRange);
@@ -103,8 +104,8 @@ namespace Settings {
 		bProfile = GetUInt("Debug", "bProfile", bProfile) != 0;
 		bDeferToppers = GetUInt("Debug", "bDeferToppers", bDeferToppers) != 0;
 
-		_MESSAGE("Settings: Enabled %u, unrolled mapping %u, max distance %.1f, blend range %.1f, ortho factor %.2f, %u terrain blend types, %u blacklist entries, %u toppers, debug mode %u, profile %u",
-			bEnabled, bUnrolledMapping, fMaxDistance, fBlendRange, fBlendRangeOrthoFactor, static_cast<uint32_t>(kBlendTypesTerrainToStatic.size()), static_cast<uint32_t>(kTerrainToStaticBlacklist.size()),
+		_MESSAGE("Settings: Enabled %u, toggle key %u, unrolled mapping %u, max distance %.1f, blend range %.1f, ortho factor %.2f, %u terrain blend types, %u blacklist entries, %u toppers, debug mode %u, profile %u",
+			bEnabled, uiToggleKey, bUnrolledMapping, fMaxDistance, fBlendRange, fBlendRangeOrthoFactor, static_cast<uint32_t>(kBlendTypesTerrainToStatic.size()), static_cast<uint32_t>(kTerrainToStaticBlacklist.size()),
 			static_cast<uint32_t>(kStaticToStaticWhitelist.size()), eDebugMode, bProfile);
 	}
 

@@ -1,6 +1,7 @@
 #include "Bethesda/BSMemory.hpp"
 #include "nvse/PluginAPI.h"
 
+#include "BlendToggle.hpp"
 #include "Dependencies.hpp"
 #include "OverlayPass.hpp"
 #include "RenderStates.hpp"
@@ -30,6 +31,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* apMessage) {
 		case NVSEMessagingInterface::kMessage_MainGameLoop:
 			// Runs before the frame is rendered. Drops passes of a frame that got no depth callback.
 			OverlayPass::OnMainLoop();
+			BlendToggle::Poll();
 			TerrainPasses::Clear();
 			TopperPasses::Clear();
 			break;

@@ -20,6 +20,7 @@ namespace Settings {
 	};
 
 	inline bool bEnabled = true;
+	inline uint32_t uiToggleKey = 121; // Windows virtual-key code, 121 = F10. 0 turns the toggle off.
 	inline bool bUnrolledMapping = true; // Off: the blend samples the terrain straight under the surface.
 	inline float fMaxDistance = 4096.0f; // Game units, ~58 m
 	inline float fBlendRange = 48.0f; // Game units along the surface, ~70 cm

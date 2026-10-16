@@ -144,6 +144,9 @@
     <ClCompile Include="Source\main.cpp">
       <Filter>Source</Filter>
     </ClCompile>
+    <ClCompile Include="Source\BlendToggle.cpp">
+      <Filter>Source</Filter>
+    </ClCompile>
     <ClCompile Include="Source\Dependencies.cpp">
       <Filter>Source</Filter>
     </ClCompile>
@@ -182,6 +185,9 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\BlendToggle.hpp">
+      <Filter>Source</Filter>
+    </ClInclude>
     <ClInclude Include="Source\Dependencies.hpp">
       <Filter>Source</Filter>
     </ClInclude>
