@@ -15,9 +15,9 @@ namespace RenderStates {
 
 	// A render state change the game requested while the state was locked.
 	struct Request {
-		bool		bRequested;
-		uint32_t	uiValue;
-		bool		bSave;
+		bool bRequested;
+		uint32_t uiValue;
+		bool bSave;
 	};
 
 	void Track(D3DRENDERSTATETYPE aeState, bool abTrack);
@@ -86,12 +86,12 @@ public:
 
 private:
 	struct SavedState {
-		D3DRENDERSTATETYPE	eState;
-		uint32_t			uiValue;
-		bool				bSaved;
-		bool				bTracked;
+		D3DRENDERSTATETYPE eState;
+		uint32_t uiValue;
+		bool bSaved;
+		bool bTracked;
 	};
 
-	NiDX9RenderState*		pRenderState;
-	std::vector<SavedState>	kSaved;
+	NiDX9RenderState* pRenderState;
+	std::vector<SavedState> kSaved;
 };

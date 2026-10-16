@@ -5,14 +5,14 @@
 namespace RenderStates {
 
 	// Slot of `NiDX9RenderState::SetRenderState`. `BSRenderState::SetRenderState` calls [vtable + 0x68].
-	static constexpr uint32_t SET_RENDER_STATE_SLOT	= 26;
-	static constexpr uint32_t STATE_COUNT			= 256;
+	static constexpr uint32_t SET_RENDER_STATE_SLOT = 26;
+	static constexpr uint32_t STATE_COUNT = 256;
 
 	typedef void(__thiscall* SetRenderStateFn)(NiDX9RenderState*, D3DRENDERSTATETYPE, uint32_t, int, bool);
 
-	static SetRenderStateFn	pOriginal					= nullptr;
-	static bool				bTracked[STATE_COUNT]		= {};
-	static Request			kRequests[STATE_COUNT]		= {};
+	static SetRenderStateFn pOriginal = nullptr;
+	static bool bTracked[STATE_COUNT] = {};
+	static Request kRequests[STATE_COUNT] = {};
 
 	// Records changes to tracked states that `NiDX9RenderState` is about to skip because they are locked.
 	static void __fastcall SetRenderStateHook(NiDX9RenderState* apThis, void*, D3DRENDERSTATETYPE aeState, uint32_t auiValue, int aiUnused, bool abSave) {

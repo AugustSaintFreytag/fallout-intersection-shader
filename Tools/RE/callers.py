@@ -17,7 +17,7 @@ def main():
     targets = {int(spec, 16) for spec in sys.argv[1:]}
 
     for section in pe.sections:
-        if not section.Characteristics & 0x20000000:  # IMAGE_SCN_MEM_EXECUTE
+        if not section.Characteristics & 0x20000000: # IMAGE_SCN_MEM_EXECUTE
             continue
         data = section.get_data()
         start = base + section.VirtualAddress

@@ -55,21 +55,21 @@ namespace TopperPasses {
 
 	// A topper pass draw recorded for the replay, with the render states it started with.
 	struct RecordedPass {
-		void*						pRenderPass;
-		uint32_t					uiPassType;
-		uint32_t					uiArg2;
-		uint32_t					uiArg3;
-		uint32_t					uiArg4;
-		const BSRenderedTexture*	pTarget;
-		uint32_t					uiTags;
-		uint32_t					uiZFunc;
-		uint32_t					uiInherited[ARRAYSIZE(kInheritedStates)];
-		uint32_t					uiLocked[ARRAYSIZE(kLockedStates)];
+		void* pRenderPass;
+		uint32_t uiPassType;
+		uint32_t uiArg2;
+		uint32_t uiArg3;
+		uint32_t uiArg4;
+		const BSRenderedTexture* pTarget;
+		uint32_t uiTags;
+		uint32_t uiZFunc;
+		uint32_t uiInherited[ARRAYSIZE(kInheritedStates)];
+		uint32_t uiLocked[ARRAYSIZE(kLockedStates)];
 	};
 
-	static bool							bEnabled	= false;
-	static std::vector<RecordedPass>	kRecordedPasses;
-	static double						dResolveMilliseconds	= 0.0;	// CPU time in `ResolveSceneDepth` since the last `ConsumeResolveMilliseconds`
+	static bool bEnabled = false;
+	static std::vector<RecordedPass> kRecordedPasses;
+	static double dResolveMilliseconds = 0.0; // CPU time in `ResolveSceneDepth` since the last `ConsumeResolveMilliseconds`
 
 	// Resolves the scene depth through Depth Resolve and adds the CPU time of the call to the profile.
 	static void ResolveSceneDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget) {

@@ -36,21 +36,21 @@ namespace DrawRedirect {
 
 	// Covers the whole clip space square. Every pixel is drawn once.
 	static constexpr Vertex kTriangle[3] = {
-		{ -1.0f,  1.0f, 0.0f },
-		{  3.0f,  1.0f, 0.0f },
+		{ -1.0f, 1.0f, 0.0f },
+		{ 3.0f, 1.0f, 0.0f },
 		{ -1.0f, -3.0f, 0.0f },
 	};
 
-	static DrawIndexedPrimitiveFn		pOriginal		= nullptr;
-	static NiD3DVertexShader*			pVertexShader	= nullptr;
-	static IDirect3DVertexDeclaration9*	pDeclaration	= nullptr;
-	static Mode							eMode			= MODE_OFF;
-	static IDirect3DPixelShader9*		pPassShader		= nullptr;	// Pixel shader for the draws of the current pass
-	static bool							bPassDrawn		= false;	// The current pass has drawn its triangle.
-	static IDirect3DVertexBuffer9*		pPassStream		= nullptr;	// Stream 0 of that draw, compared only, no reference held
-	static uint32_t						uiCount			= 0;
-	static uint32_t						uiSkipped		= 0;
-	static uint32_t						uiForeign		= 0;
+	static DrawIndexedPrimitiveFn pOriginal = nullptr;
+	static NiD3DVertexShader* pVertexShader = nullptr;
+	static IDirect3DVertexDeclaration9* pDeclaration = nullptr;
+	static Mode eMode = MODE_OFF;
+	static IDirect3DPixelShader9* pPassShader = nullptr; // Pixel shader for the draws of the current pass
+	static bool bPassDrawn = false; // The current pass has drawn its triangle.
+	static IDirect3DVertexBuffer9* pPassStream = nullptr; // Stream 0 of that draw, compared only, no reference held
+	static uint32_t uiCount = 0;
+	static uint32_t uiSkipped = 0;
+	static uint32_t uiForeign = 0;
 
 	template <typename T>
 	static void SafeRelease(T*& apObject) {

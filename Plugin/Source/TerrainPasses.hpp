@@ -11,8 +11,8 @@ namespace TerrainPasses {
 	// each with and without canopy shadows. Pass 560, the LOD fade pass, is left out on purpose.
 	//
 	// Reference at "VanillaPlusTerrain/main.cpp", "AddPass_Landscape".
-	inline constexpr uint32_t FIRST_LANDSCAPE_PASS	= 503;
-	inline constexpr uint32_t LAST_LANDSCAPE_PASS	= 558;
+	inline constexpr uint32_t FIRST_LANDSCAPE_PASS = 503;
+	inline constexpr uint32_t LAST_LANDSCAPE_PASS = 558;
 
 	void InstallHooks();
 
