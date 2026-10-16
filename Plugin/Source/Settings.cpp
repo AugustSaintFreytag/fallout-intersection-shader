@@ -5,12 +5,12 @@
 
 namespace Settings {
 
-	static constexpr const char* INI_PATH		= "Data\\NVSE\\Plugins\\IntersectionBlend.ini";
-	static constexpr const char* FORMS_INI_PATH	= "Data\\NVSE\\Plugins\\IntersectionBlendForms.ini";
+	static constexpr const char* INI_PATH = "Data\\NVSE\\Plugins\\IntersectionBlend.ini";
+	static constexpr const char* FORMS_INI_PATH = "Data\\NVSE\\Plugins\\IntersectionBlendForms.ini";
 
 	struct FormTypeName {
-		const char*	pName;
-		uint8_t		ucType;
+		const char* pName;
+		uint8_t ucType;
 	};
 
 	// Base form types that can be selected for terrain blending.
@@ -89,19 +89,19 @@ namespace Settings {
 
 	// Reads `IntersectionBlend.ini` and the form lists in `IntersectionBlendForms.ini`. Missing keys keep their defaults.
 	void Load() {
-		bEnabled				= GetUInt("Main", "bEnabled", bEnabled) != 0;
-		bUnrolledMapping		= GetUInt("Blend", "bUnrolledMapping", bUnrolledMapping) != 0;
-		fMaxDistance			= GetFloat("Blend", "fMaxDistance", fMaxDistance);
-		fBlendRange				= GetFloat("Blend", "fBlendRange", fBlendRange);
-		fBlendRangeOrthoFactor	= std::clamp(GetFloat("Blend", "fBlendRangeOrthoFactor", fBlendRangeOrthoFactor), 0.0f, 1.0f);
-		kBlendTypesTerrainToStatic		= ParseFormTypes(GetString("Blend", "sBlendTypesTerrainToStatic", "STAT, SCOL"));
-		fCropHeight				= GetFloat("StaticBlend", "fCropHeight", fCropHeight);
-		fCropScale				= std::max(GetFloat("StaticBlend", "fCropScale", fCropScale), 1.0f);
-		kTerrainToStaticBlacklist	= GetEditorIDList("TerrainToStaticBlacklist");
-		kStaticToStaticWhitelist	= GetEditorIDList("StaticToStaticWhitelist");
-		eDebugMode				= static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
-		bProfile				= GetUInt("Debug", "bProfile", bProfile) != 0;
-		bDeferToppers			= GetUInt("Debug", "bDeferToppers", bDeferToppers) != 0;
+		bEnabled = GetUInt("Main", "bEnabled", bEnabled) != 0;
+		bUnrolledMapping = GetUInt("Blend", "bUnrolledMapping", bUnrolledMapping) != 0;
+		fMaxDistance = GetFloat("Blend", "fMaxDistance", fMaxDistance);
+		fBlendRange = GetFloat("Blend", "fBlendRange", fBlendRange);
+		fBlendRangeOrthoFactor = std::clamp(GetFloat("Blend", "fBlendRangeOrthoFactor", fBlendRangeOrthoFactor), 0.0f, 1.0f);
+		kBlendTypesTerrainToStatic = ParseFormTypes(GetString("Blend", "sBlendTypesTerrainToStatic", "STAT, SCOL"));
+		fCropHeight = GetFloat("StaticBlend", "fCropHeight", fCropHeight);
+		fCropScale = std::max(GetFloat("StaticBlend", "fCropScale", fCropScale), 1.0f);
+		kTerrainToStaticBlacklist = GetEditorIDList("TerrainToStaticBlacklist");
+		kStaticToStaticWhitelist = GetEditorIDList("StaticToStaticWhitelist");
+		eDebugMode = static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
+		bProfile = GetUInt("Debug", "bProfile", bProfile) != 0;
+		bDeferToppers = GetUInt("Debug", "bDeferToppers", bDeferToppers) != 0;
 
 		_MESSAGE("Settings: enabled %u, unrolled mapping %u, max distance %.1f, blend range %.1f, ortho factor %.2f, %u terrain blend types, %u blacklist entries, %u toppers, debug mode %u, profile %u",
 			bEnabled, bUnrolledMapping, fMaxDistance, fBlendRange, fBlendRangeOrthoFactor, static_cast<uint32_t>(kBlendTypesTerrainToStatic.size()), static_cast<uint32_t>(kTerrainToStaticBlacklist.size()),

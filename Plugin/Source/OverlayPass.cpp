@@ -36,30 +36,30 @@
 namespace OverlayPass {
 
 	// Must match "Shaders/Includes/TerrainOverlay.hlsli".
-	static constexpr uint32_t	OVERLAY_CONSTANT_REGISTER	= 89;	// c89-c96
-	static constexpr uint32_t	OVERLAY_CONSTANT_COUNT		= 8;
-	static constexpr uint32_t	BLOCK_CONSTANT_REGISTER		= 92;	// c92-c93, per pass
-	static constexpr uint32_t	GROUND_BUFFER_SAMPLER		= 14;	// Ground buffer, then the ground points at s15.
-	static constexpr uint32_t	GROUND_SAMPLER_COUNT		= 2;
-	static constexpr float		LANDSCAPE_BLOCK_SIZE		= 2048.0f;
+	static constexpr uint32_t OVERLAY_CONSTANT_REGISTER = 89; // c89-c96
+	static constexpr uint32_t OVERLAY_CONSTANT_COUNT = 8;
+	static constexpr uint32_t BLOCK_CONSTANT_REGISTER = 92; // c92-c93, per pass
+	static constexpr uint32_t GROUND_BUFFER_SAMPLER = 14; // Ground buffer, then the ground points at s15.
+	static constexpr uint32_t GROUND_SAMPLER_COUNT = 2;
+	static constexpr float LANDSCAPE_BLOCK_SIZE = 2048.0f;
 
 	// Reach of the blend past the surface it shades, in multiples of `fBlendRange`. The unrolled mapping moves the
 	// ground point up to ~2.6 times the height past the foot. The height of a shaded surface stays within the range.
-	static constexpr float		BLEND_REACH					= 4.0f;
-	static constexpr uint32_t	TERRAIN_SAMPLER_COUNT		= 14;	// `BaseMap[7]` and `NormalMap[7]`
+	static constexpr float BLEND_REACH = 4.0f;
+	static constexpr uint32_t TERRAIN_SAMPLER_COUNT = 14; // `BaseMap[7]` and `NormalMap[7]`
 
 	struct FullscreenVertex {
 		float x, y, z;
 		float u, v;
 	};
 
-	static NiD3DVertexShader*			pDebugVS				= nullptr;
-	static NiD3DPixelShader*			pDebugPS				= nullptr;
-	static IDirect3DVertexDeclaration9*	pFullscreenDecl			= nullptr;
-	static bool							bDebugReady				= false;
-	static bool							bOverlayReady			= false;
-	static uint32_t						uiLoggedFrames			= 0;
-	static uint32_t						uiFrameCallbacks		= 0;
+	static NiD3DVertexShader* pDebugVS = nullptr;
+	static NiD3DPixelShader* pDebugPS = nullptr;
+	static IDirect3DVertexDeclaration9* pFullscreenDecl = nullptr;
+	static bool bDebugReady = false;
+	static bool bOverlayReady = false;
+	static uint32_t uiLoggedFrames = 0;
+	static uint32_t uiFrameCallbacks = 0;
 
 	// Loads the ground shaders and initializes the ground buffer, the draw redirect, stencil tagging and the debug views.
 	// The overlay needs both the ground shaders and the draw redirect.
@@ -87,7 +87,7 @@ namespace OverlayPass {
 		pDebugPS->IncRefCount();
 
 		const D3DVERTEXELEMENT9 kElements[] = {
-			{ 0, 0,  D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+			{ 0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
 			{ 0, 12, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
 			D3DDECL_END()
 		};
@@ -138,11 +138,11 @@ namespace OverlayPass {
 
 	// Height range of a landscape block's mesh, cached per geometry.
 	struct HeightRange {
-		const NiGeometryData*	pData;		// Model data the range was taken from
-		NiPoint3				kCenter;	// World bound centre then
-		float					fMin;		// World z
-		float					fMax;
-		bool					bFromVertices;
+		const NiGeometryData* pData; // Model data the range was taken from
+		NiPoint3 kCenter; // World bound centre then
+		float fMin; // World z
+		float fMax;
+		bool bFromVertices;
 	};
 
 	// Above this many entries the cache is cleared. Freed geometry leaves its entry behind.
@@ -430,7 +430,7 @@ namespace OverlayPass {
 		float fDepthParams[4];
 		GetDepthParams(apCamera, fDepthParams);
 		const float fBlendParams[4] = { Settings::fMaxDistance, Settings::fBlendRange, static_cast<float>(Settings::eDebugMode), 0.0f };
-		const float fTexelSize[4]	= { 1.0f / kViewport.Width, 1.0f / kViewport.Height, 0.0f, 0.0f };
+		const float fTexelSize[4] = { 1.0f / kViewport.Width, 1.0f / kViewport.Height, 0.0f, 0.0f };
 
 		apDevice->SetVertexShaderConstantF(0, fTexelSize, 1);
 		apDevice->SetPixelShaderConstantF(0, fDepthParams, 1);
@@ -474,10 +474,10 @@ namespace OverlayPass {
 		apDevice->SetPixelShader(pDebugPS->GetShaderHandle());
 
 		const FullscreenVertex kQuad[4] = {
-			{ -1.0f,  1.0f, 0.0f, 0.0f, 0.0f },
-			{  1.0f,  1.0f, 0.0f, 1.0f, 0.0f },
+			{ -1.0f, 1.0f, 0.0f, 0.0f, 0.0f },
+			{ 1.0f, 1.0f, 0.0f, 1.0f, 0.0f },
 			{ -1.0f, -1.0f, 0.0f, 0.0f, 1.0f },
-			{  1.0f, -1.0f, 0.0f, 1.0f, 1.0f },
+			{ 1.0f, -1.0f, 0.0f, 1.0f, 1.0f },
 		};
 		apDevice->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, kQuad, sizeof(FullscreenVertex));
 
@@ -490,13 +490,13 @@ namespace OverlayPass {
 	void OnMainLoop() {
 		static constexpr uint32_t MAX_LOG_LINES = 200;
 
-		static uint32_t uiLoop		= 0;
-		static uint32_t uiLogLines	= 0;
-		static bool		bRendering	= false;
+		static uint32_t uiLoop = 0;
+		static uint32_t uiLogLines = 0;
+		static bool bRendering = false;
 
 		uiLoop++;
-		const uint32_t uiCallbacks		= std::exchange(uiFrameCallbacks, 0);
-		const uint32_t uiTaggedStages	= StencilTags::ConsumeTaggedStageCount();
+		const uint32_t uiCallbacks = std::exchange(uiFrameCallbacks, 0);
+		const uint32_t uiTaggedStages = StencilTags::ConsumeTaggedStageCount();
 		if (uiLogLines >= MAX_LOG_LINES || uiLoop == 1)
 			return;
 

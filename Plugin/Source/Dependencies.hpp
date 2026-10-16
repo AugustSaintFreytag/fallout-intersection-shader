@@ -22,7 +22,7 @@ namespace Dependencies {
 	bool CanResolveSceneDepth();
 	void ResolveSceneDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget);
 
-	NiD3DVertexShader*	CreateVertexShader(const char* apFilename);
-	NiD3DPixelShader*	CreatePixelShader(const char* apFilename);
+	NiD3DVertexShader* CreateVertexShader(const char* apFilename);
+	NiD3DPixelShader* CreatePixelShader(const char* apFilename);
 
 }

@@ -19,20 +19,20 @@
 // Reference at "Shaders/compile.ps1".
 namespace GroundShaders {
 
-	static constexpr uint32_t	TEXTURE_COUNTS		= 7;
-	static constexpr uint32_t	LIGHT_VARIANTS		= 4;
-	static constexpr uint32_t	kPointLights[LIGHT_VARIANTS] = { 0, 6, 12, 24 };
+	static constexpr uint32_t TEXTURE_COUNTS = 7;
+	static constexpr uint32_t LIGHT_VARIANTS = 4;
+	static constexpr uint32_t kPointLights[LIGHT_VARIANTS] = { 0, 6, 12, 24 };
 
 	// Passes per texture count: no point lights, 6, 12 and 24, each with and without canopy shadows.
 	// Both canopy variants draw with the same pixel shader.
-	static constexpr uint32_t	PASSES_PER_TEXTURE_COUNT = 8;
+	static constexpr uint32_t PASSES_PER_TEXTURE_COUNT = 8;
 
 	// Ground shader sets, by folder in `Shaders\Loose\IntersectionBlend\Ground\`.
 	enum ShaderSet : int32_t {
-		SET_NONE				= -1,
-		SET_VPT					= 0,
-		SET_PARALLAX			= 1,
-		SET_PARALLAX_OPTIMIZED	= 2,
+		SET_NONE = -1,
+		SET_VPT = 0,
+		SET_PARALLAX = 1,
+		SET_PARALLAX_OPTIMIZED = 2,
 	};
 
 	static constexpr const char* kSetFolders[] = { "VPT", "Parallax", "ParallaxOptimized" };
@@ -40,8 +40,8 @@ namespace GroundShaders {
 
 	static constexpr const char* INSTALLED_SHADER_PATH = "Data\\Shaders\\Loose\\SLS2092.pso";
 
-	static NiD3DPixelShader*	pOverlayShaders[TEXTURE_COUNTS * LIGHT_VARIANTS] = {};
-	static NiD3DPixelShader*	pFieldShader	= nullptr;
+	static NiD3DPixelShader* pOverlayShaders[TEXTURE_COUNTS * LIGHT_VARIANTS] = {};
+	static NiD3DPixelShader* pFieldShader = nullptr;
 
 	static bool ReadFile(const char* apPath, std::vector<char>& arData) {
 		FILE* pFile = nullptr;

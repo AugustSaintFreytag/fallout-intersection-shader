@@ -14,22 +14,22 @@
 // The log gets one line per stage every few seconds: average and maximum in milliseconds.
 namespace Profiler {
 
-	static constexpr uint32_t	SET_COUNT			= 4;	// Frames in flight before a set is read again
-	static constexpr double		LOG_INTERVAL		= 5.0;	// Seconds
-	static constexpr const char*	STAGE_NAMES[STAGE_COUNT] = { "toppers", "field", "ground", "overlay" };
+	static constexpr uint32_t SET_COUNT = 4; // Frames in flight before a set is read again
+	static constexpr double LOG_INTERVAL = 5.0; // Seconds
+	static constexpr const char* STAGE_NAMES[STAGE_COUNT] = { "toppers", "field", "ground", "overlay" };
 
 	// The queries of one frame.
 	struct QuerySet {
-		IDirect3DQuery9*	pDisjoint						= nullptr;
-		IDirect3DQuery9*	pFrequency						= nullptr;
-		IDirect3DQuery9*	pTimestamps[STAGE_COUNT + 1]	= {};
-		bool				bPending						= false;
+		IDirect3DQuery9* pDisjoint = nullptr;
+		IDirect3DQuery9* pFrequency = nullptr;
+		IDirect3DQuery9* pTimestamps[STAGE_COUNT + 1] = {};
+		bool bPending = false;
 	};
 
 	// Sum and maximum of one measured value over the log interval.
 	struct Accumulator {
-		double		dSum	= 0.0;
-		double		dMax	= 0.0;
+		double dSum = 0.0;
+		double dMax = 0.0;
 
 		void Add(double adValue) {
 			dSum += adValue;
@@ -37,34 +37,34 @@ namespace Profiler {
 		}
 	};
 
-	static IDirect3DDevice9*	pDevice					= nullptr;
-	static QuerySet				kSets[SET_COUNT];
-	static uint32_t				uiCurrentSet			= 0;
-	static uint32_t				uiNextTimestamp			= 0;	// In the current set
-	static bool					bInFrame				= false;
-	static bool					bReady					= false;
+	static IDirect3DDevice9* pDevice = nullptr;
+	static QuerySet kSets[SET_COUNT];
+	static uint32_t uiCurrentSet = 0;
+	static uint32_t uiNextTimestamp = 0; // In the current set
+	static bool bInFrame = false;
+	static bool bReady = false;
 
 	// Log Interval
-	static Accumulator			kStageTimes[STAGE_COUNT];
-	static Accumulator			kReplayCpu;
-	static Accumulator			kCallbackCpu;
-	static Accumulator			kTopperCpu;
-	static Accumulator			kResolveCpu;
-	static uint32_t				uiCallbackFrames		= 0;
-	static Accumulator			kPasses;
-	static Accumulator			kDrawn;
-	static Accumulator			kSkipped;
-	static uint32_t				uiForeignDraws			= 0;
-	static Accumulator			kScreens;
-	static Accumulator			kTagged;
-	static Accumulator			kToppers;
-	static Accumulator			kDistant;
-	static uint32_t				uiTagFrames				= 0;
-	static uint32_t				uiGpuFrames				= 0;
-	static uint32_t				uiReplayFrames			= 0;
-	static uint32_t				uiDroppedFrames			= 0;
-	static LARGE_INTEGER		kIntervalStart			= {};
-	static LARGE_INTEGER		kCounterFrequency		= {};
+	static Accumulator kStageTimes[STAGE_COUNT];
+	static Accumulator kReplayCpu;
+	static Accumulator kCallbackCpu;
+	static Accumulator kTopperCpu;
+	static Accumulator kResolveCpu;
+	static uint32_t uiCallbackFrames = 0;
+	static Accumulator kPasses;
+	static Accumulator kDrawn;
+	static Accumulator kSkipped;
+	static uint32_t uiForeignDraws = 0;
+	static Accumulator kScreens;
+	static Accumulator kTagged;
+	static Accumulator kToppers;
+	static Accumulator kDistant;
+	static uint32_t uiTagFrames = 0;
+	static uint32_t uiGpuFrames = 0;
+	static uint32_t uiReplayFrames = 0;
+	static uint32_t uiDroppedFrames = 0;
+	static LARGE_INTEGER kIntervalStart = {};
+	static LARGE_INTEGER kCounterFrequency = {};
 
 	template <typename T>
 	static void SafeRelease(T*& apObject) {

@@ -30,24 +30,24 @@ namespace TopperCrop {
 
 	// Covers the whole clip space square. Every pixel is drawn once.
 	static constexpr Vertex kTriangle[3] = {
-		{ -1.0f,  1.0f, 0.0f },
-		{  3.0f,  1.0f, 0.0f },
+		{ -1.0f, 1.0f, 0.0f },
+		{ 3.0f, 1.0f, 0.0f },
 		{ -1.0f, -3.0f, 0.0f },
 	};
 
-	static NiD3DVertexShader*			pVertexShader	= nullptr;
-	static NiD3DPixelShader*			pCopyShader		= nullptr;
-	static NiD3DPixelShader*			pCropShader		= nullptr;
-	static IDirect3DVertexDeclaration9*	pDeclaration	= nullptr;
-	static bool							bReady			= false;
+	static NiD3DVertexShader* pVertexShader = nullptr;
+	static NiD3DPixelShader* pCopyShader = nullptr;
+	static NiD3DPixelShader* pCropShader = nullptr;
+	static IDirect3DVertexDeclaration9* pDeclaration = nullptr;
+	static bool bReady = false;
 
 	// Device Resources
 	// Released before a device reset and created again on demand.
-	static IDirect3DTexture9*			pBaseTexture	= nullptr;	// R32F, reversed depth without toppers
-	static IDirect3DSurface9*			pBaseSurface	= nullptr;
-	static IDirect3DStateBlock9*		pStateBlock		= nullptr;
-	static uint32_t						uiWidth			= 0;
-	static uint32_t						uiHeight		= 0;
+	static IDirect3DTexture9* pBaseTexture = nullptr; // R32F, reversed depth without toppers
+	static IDirect3DSurface9* pBaseSurface = nullptr;
+	static IDirect3DStateBlock9* pStateBlock = nullptr;
+	static uint32_t uiWidth = 0;
+	static uint32_t uiHeight = 0;
 
 	template <typename T>
 	static void SafeRelease(T*& apObject) {
@@ -61,8 +61,8 @@ namespace TopperCrop {
 		SafeRelease(pBaseSurface);
 		SafeRelease(pBaseTexture);
 		SafeRelease(pStateBlock);
-		uiWidth		= 0;
-		uiHeight	= 0;
+		uiWidth = 0;
+		uiHeight = 0;
 	}
 
 	static bool __cdecl OnDeviceReset(bool abBeforeReset, void*) {
@@ -74,9 +74,9 @@ namespace TopperCrop {
 	// Loads the crop shaders and registers for device resets. The crop is off if a shader is missing.
 	// Call once the D3D device exists, at NVSE DeferredInit.
 	void Initialize() {
-		pVertexShader	= Dependencies::CreateVertexShader("IntersectionBlend\\GroundQuad.vso");
-		pCopyShader		= Dependencies::CreatePixelShader("IntersectionBlend\\TopperCopy.pso");
-		pCropShader		= Dependencies::CreatePixelShader("IntersectionBlend\\TopperCrop.pso");
+		pVertexShader = Dependencies::CreateVertexShader("IntersectionBlend\\GroundQuad.vso");
+		pCopyShader = Dependencies::CreatePixelShader("IntersectionBlend\\TopperCopy.pso");
+		pCropShader = Dependencies::CreatePixelShader("IntersectionBlend\\TopperCrop.pso");
 		if (!pVertexShader || !pCopyShader || !pCropShader) {
 			_MESSAGE("Failed to load the topper crop shaders (VS %p, copy %p, crop %p), toppers are not cropped", pVertexShader, pCopyShader, pCropShader);
 			return;
@@ -121,8 +121,8 @@ namespace TopperCrop {
 			return false;
 		}
 
-		uiWidth		= kDesc.Width;
-		uiHeight	= kDesc.Height;
+		uiWidth = kDesc.Width;
+		uiHeight = kDesc.Height;
 		_MESSAGE("Topper crop base depth created (%u x %u)", uiWidth, uiHeight);
 		return true;
 	}

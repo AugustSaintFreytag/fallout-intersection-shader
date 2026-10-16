@@ -38,54 +38,54 @@ namespace StencilTags {
 	// Calls of `FinishAccumulating_Standard_PreResolveDepth` (GAME - 0xB65AE0), cdecl `(BSShaderAccumulator*)`.
 	// One is in `FinishAccumulatingPreResolveDepth` for the normal render mode (GAME - 0xB66520). The other is in the
 	// function that runs both stages back to back (GAME - 0xB665A0). Depth Resolve replaces the calls of the second stage next to them.
-	static constexpr uint32_t PRE_RESOLVE_CALL_STANDARD	= 0xB6653D;
-	static constexpr uint32_t PRE_RESOLVE_CALL_COMBINED	= 0xB665A6;
+	static constexpr uint32_t PRE_RESOLVE_CALL_STANDARD = 0xB6653D;
+	static constexpr uint32_t PRE_RESOLVE_CALL_COMBINED = 0xB665A6;
 
 	// Engine Layout
 	// Reference at JIP LN NVSE and xNVSE.
-	static constexpr uint32_t VTBL_BS_FADE_NODE			= 0x10A8F90;
-	static constexpr uint32_t FADE_NODE_REFERENCE		= 0xCC;		// `TESObjectREFR*`, null for nodes without a reference
-	static constexpr uint32_t REFR_BASE_FORM			= 0x20;		// `TESForm*`
-	static constexpr uint32_t FORM_TYPE_ID				= 0x04;		// `uint8_t`
-	static constexpr uint32_t FORM_REF_ID				= 0x0C;		// `uint32_t`
+	static constexpr uint32_t VTBL_BS_FADE_NODE = 0x10A8F90;
+	static constexpr uint32_t FADE_NODE_REFERENCE = 0xCC; // `TESObjectREFR*`, null for nodes without a reference
+	static constexpr uint32_t REFR_BASE_FORM = 0x20; // `TESForm*`
+	static constexpr uint32_t FORM_TYPE_ID = 0x04; // `uint8_t`
+	static constexpr uint32_t FORM_REF_ID = 0x0C; // `uint32_t`
 
 	// `TESForm::GetFormByEditorID` (GAME - 0x483A00), cdecl `TESForm* (const char*)`.
 	// JohnnyGuitar NVSE replaces it with a lookup in the editor ID map it fills for all form types it covers.
 	// Reference at JohnnyGuitar NVSE, "JG/internal/JG/EditorIDRestoration.cpp".
-	static constexpr uint32_t GET_FORM_BY_EDITOR_ID		= 0x483A00;
+	static constexpr uint32_t GET_FORM_BY_EDITOR_ID = 0x483A00;
 
-	static constexpr uint32_t MAX_PARENT_DEPTH			= 64;
+	static constexpr uint32_t MAX_PARENT_DEPTH = 64;
 
 	typedef void(__cdecl* PreResolveDepthFn)(BSShaderAccumulator*);
 
-	static CallDetour							kStandardDetour;
-	static CallDetour							kCombinedDetour;
-	static bool									bEnabled			= true;
-	static bool									bTypeEligible[256]	= {};
-	static std::unordered_set<uint32_t>			kBlacklist;			// Base form IDs
-	static std::unordered_set<uint32_t>			kToppers;			// Base form IDs
-	static std::unique_ptr<ForcedRenderStates>	pTaggingStates;
-	static const BSRenderedTexture*				pTaggedTarget		= nullptr;
-	static uint32_t								uiTaggedStages		= 0;
+	static CallDetour kStandardDetour;
+	static CallDetour kCombinedDetour;
+	static bool bEnabled = true;
+	static bool bTypeEligible[256] = {};
+	static std::unordered_set<uint32_t> kBlacklist; // Base form IDs
+	static std::unordered_set<uint32_t> kToppers; // Base form IDs
+	static std::unique_ptr<ForcedRenderStates> pTaggingStates;
+	static const BSRenderedTexture* pTaggedTarget = nullptr;
+	static uint32_t uiTaggedStages = 0;
 
 	// Geometry and tag bits of the last pass. Lit geometry draws one pass per light group, back to back.
-	static const NiGeometry*					pLastGeometry		= nullptr;
-	static uint32_t								uiLastTags			= 0;
+	static const NiGeometry* pLastGeometry = nullptr;
+	static uint32_t uiLastTags = 0;
 
 	// Camera of the tagged stage, for the distance limit.
-	static NiPoint3								kEye;
-	static NiPoint3								kViewDirection;
+	static NiPoint3 kEye;
+	static NiPoint3 kViewDirection;
 
 	// Untagged Geometry Log
 	// Debug mode 3 logs why geometry gets no `TERRAIN_BLEND_BIT`, once per object.
-	static constexpr uint32_t					MAX_UNTAGGED_LINES	= 200;
-	static constexpr uint32_t					FORM_GET_EDITOR_ID	= 0x130;	// Vtable offset of `TESForm::GetEditorID`
-	static std::unordered_set<std::string>		kLoggedUntagged;
+	static constexpr uint32_t MAX_UNTAGGED_LINES = 200;
+	static constexpr uint32_t FORM_GET_EDITOR_ID = 0x130; // Vtable offset of `TESForm::GetEditorID`
+	static std::unordered_set<std::string> kLoggedUntagged;
 
 	// Geometry verdicts since the last `ConsumeCounts`
-	static uint32_t								uiTaggedGeometry	= 0;
-	static uint32_t								uiTopperGeometry	= 0;
-	static uint32_t								uiDistantGeometry	= 0;
+	static uint32_t uiTaggedGeometry = 0;
+	static uint32_t uiTopperGeometry = 0;
+	static uint32_t uiDistantGeometry = 0;
 
 	template <typename T>
 	static T Field(const void* apObject, uint32_t auiOffset) {
@@ -194,8 +194,8 @@ namespace StencilTags {
 		for (uint8_t ucType : Settings::kBlendTypesTerrainToStatic)
 			bTypeEligible[ucType] = true;
 
-		kBlacklist	= ResolveEditorIDs(Settings::kTerrainToStaticBlacklist, "Terrain-to-static blacklist");
-		kToppers	= ResolveEditorIDs(Settings::kStaticToStaticWhitelist, "Static-to-static whitelist");
+		kBlacklist = ResolveEditorIDs(Settings::kTerrainToStaticBlacklist, "Terrain-to-Static Blacklist");
+		kToppers = ResolveEditorIDs(Settings::kStaticToStaticWhitelist, "Static-to-Static Whitelist");
 
 		_MESSAGE("Terrain blend selection: %u form types, %u of %u blacklisted base forms found", static_cast<uint32_t>(Settings::kBlendTypesTerrainToStatic.size()),
 			static_cast<uint32_t>(kBlacklist.size()), static_cast<uint32_t>(Settings::kTerrainToStaticBlacklist.size()));
@@ -212,7 +212,7 @@ namespace StencilTags {
 		}
 		else {
 			kEye = NiPoint3(0.0f, 0.0f, 0.0f);
-			kViewDirection = NiPoint3(0.0f, 0.0f, 0.0f);	// Every bound is in range.
+			kViewDirection = NiPoint3(0.0f, 0.0f, 0.0f); // Every bound is in range.
 		}
 
 		pTaggingStates = std::make_unique<ForcedRenderStates>(NiDX9Renderer::GetSingleton()->m_pkRenderState);
@@ -225,8 +225,8 @@ namespace StencilTags {
 		pTaggingStates->Force(D3DRS_STENCILWRITEMASK, TAG_BITS);
 		pTaggingStates->Force(D3DRS_STENCILREF, 0);
 
-		pTaggedTarget	= BSShaderManager::GetCurrentRenderTarget();
-		pLastGeometry	= nullptr;
+		pTaggedTarget = BSShaderManager::GetCurrentRenderTarget();
+		pLastGeometry = nullptr;
 		uiTaggedStages++;
 	}
 

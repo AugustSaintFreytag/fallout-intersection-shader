@@ -40,51 +40,51 @@ namespace GroundBuffer {
 	// Height field: `FIELD_SIZE`² texels over twice `[Blend] fMaxDistance` around the camera.
 	// 8 units per texel by default. Terrain vertices are 128 units apart.
 	// The field camera sits `FIELD_DEPTH` / 2 above the scene camera and sees `FIELD_DEPTH` down.
-	static constexpr uint32_t	FIELD_SIZE				= 1024;
-	static constexpr float		FIELD_DEPTH				= 65536.0f;
-	static constexpr float		FIELD_RECENTER_DISTANCE	= 512.0f;
-	static constexpr uint32_t	TERRAIN_SAMPLER_COUNT	= 14;	// `BaseMap[7]` and `NormalMap[7]`
+	static constexpr uint32_t FIELD_SIZE = 1024;
+	static constexpr float FIELD_DEPTH = 65536.0f;
+	static constexpr float FIELD_RECENTER_DISTANCE = 512.0f;
+	static constexpr uint32_t TERRAIN_SAMPLER_COUNT = 14; // `BaseMap[7]` and `NormalMap[7]`
 
 	// Must match "Shaders/Ground/GroundField.hlsl".
-	static constexpr uint32_t	BLOCK_CONSTANT_REGISTER	= 92;	// `IBBlock`
-	static constexpr float		LANDSCAPE_BLOCK_SIZE	= 2048.0f;
+	static constexpr uint32_t BLOCK_CONSTANT_REGISTER = 92; // `IBBlock`
+	static constexpr float LANDSCAPE_BLOCK_SIZE = 2048.0f;
 
 	// Attribute fields, one per target: blend weights 0-3, blend weights 4-6 with the block code, vertex colour.
-	static constexpr uint32_t	FIELD_TARGET_COUNT		= 3;
-	static constexpr uint32_t	FIELD_SAMPLER			= 2;	// s2-s4 in the ground pass
+	static constexpr uint32_t FIELD_TARGET_COUNT = 3;
+	static constexpr uint32_t FIELD_SAMPLER = 2; // s2-s4 in the ground pass
 
 	// `NiRenderer::SetCameraData(location, direction, up, right, frustum, port)` (GAME - 0x4E9C90).
 	// Checks that a frame is in progress and calls `NiDX9Renderer::Do_SetCameraData` through the vtable.
-	static constexpr uint32_t	SET_CAMERA_DATA			= 0x4E9C90;
+	static constexpr uint32_t SET_CAMERA_DATA = 0x4E9C90;
 
 	struct FullscreenVertex {
 		float x, y, z;
 		float u, v;
 	};
 
-	static NiD3DVertexShader*			pVertexShader		= nullptr;
-	static NiD3DPixelShader*			pPixelShader		= nullptr;
-	static IDirect3DVertexDeclaration9*	pDeclaration		= nullptr;
-	static bool							bReady				= false;
+	static NiD3DVertexShader* pVertexShader = nullptr;
+	static NiD3DPixelShader* pPixelShader = nullptr;
+	static IDirect3DVertexDeclaration9* pDeclaration = nullptr;
+	static bool bReady = false;
 
 	// Device Resources
 	// Released before a device reset and created again on demand.
-	static IDirect3DTexture9*			pFieldTexture		= nullptr;	// INTZ
-	static IDirect3DSurface9*			pFieldDepth			= nullptr;
-	static IDirect3DTexture9*			pAttributeTextures[FIELD_TARGET_COUNT]	= {};	// A8R8G8B8, texel for texel with the height field
-	static IDirect3DSurface9*			pAttributeSurfaces[FIELD_TARGET_COUNT]	= {};
-	static IDirect3DTexture9*			pGroundTexture		= nullptr;
-	static IDirect3DSurface9*			pGroundSurface		= nullptr;
-	static IDirect3DTexture9*			pPointTexture		= nullptr;	// Ground points, the second ground pass target.
-	static IDirect3DSurface9*			pPointSurface		= nullptr;
-	static IDirect3DStateBlock9*		pStateBlock			= nullptr;
-	static uint32_t						uiGroundWidth		= 0;
-	static uint32_t						uiGroundHeight		= 0;
+	static IDirect3DTexture9* pFieldTexture = nullptr; // INTZ
+	static IDirect3DSurface9* pFieldDepth = nullptr;
+	static IDirect3DTexture9* pAttributeTextures[FIELD_TARGET_COUNT] = {}; // A8R8G8B8, texel for texel with the height field
+	static IDirect3DSurface9* pAttributeSurfaces[FIELD_TARGET_COUNT] = {};
+	static IDirect3DTexture9* pGroundTexture = nullptr;
+	static IDirect3DSurface9* pGroundSurface = nullptr;
+	static IDirect3DTexture9* pPointTexture = nullptr; // Ground points, the second ground pass target.
+	static IDirect3DSurface9* pPointSurface = nullptr;
+	static IDirect3DStateBlock9* pStateBlock = nullptr;
+	static uint32_t uiGroundWidth = 0;
+	static uint32_t uiGroundHeight = 0;
 
 	// Height Field Contents
-	static bool							bFieldValid			= false;
-	static NiPoint3						kFieldCenter;
-	static D3DXMATRIX					kFieldViewProj;
+	static bool bFieldValid = false;
+	static NiPoint3 kFieldCenter;
+	static D3DXMATRIX kFieldViewProj;
 	// Landscape geometry drawn into the height field, with its bound centre at the time.
 	// Geometry is freed when cells unload and its address reused. A block only counts as drawn while it stays in place.
 	static std::unordered_map<const NiGeometry*, NiPoint3> kFieldGeometry;
@@ -124,9 +124,9 @@ namespace GroundBuffer {
 		SafeRelease(pPointSurface);
 		SafeRelease(pPointTexture);
 		SafeRelease(pStateBlock);
-		uiGroundWidth	= 0;
-		uiGroundHeight	= 0;
-		bFieldValid		= false;
+		uiGroundWidth = 0;
+		uiGroundHeight = 0;
+		bFieldValid = false;
 	}
 
 	static bool __cdecl OnDeviceReset(bool abBeforeReset, void*) {
@@ -188,8 +188,8 @@ namespace GroundBuffer {
 			return false;
 		}
 
-		uiGroundWidth	= auiWidth;
-		uiGroundHeight	= auiHeight;
+		uiGroundWidth = auiWidth;
+		uiGroundHeight = auiHeight;
 		_MESSAGE("Ground buffer created (%u x %u)", auiWidth, auiHeight);
 		return true;
 	}
@@ -197,8 +197,8 @@ namespace GroundBuffer {
 	// Loads the ground buffer shaders and registers for device resets.
 	// Call once the D3D device exists, at NVSE DeferredInit.
 	void Initialize() {
-		pVertexShader	= Dependencies::CreateVertexShader("IntersectionBlend\\GroundBuffer.vso");
-		pPixelShader	= Dependencies::CreatePixelShader("IntersectionBlend\\GroundBuffer.pso");
+		pVertexShader = Dependencies::CreateVertexShader("IntersectionBlend\\GroundBuffer.vso");
+		pPixelShader = Dependencies::CreatePixelShader("IntersectionBlend\\GroundBuffer.pso");
 		if (!pVertexShader || !pPixelShader) {
 			_MESSAGE("Failed to load ground buffer shaders (VS %p, PS %p), terrain overlay disabled", pVertexShader, pPixelShader);
 			return;
@@ -208,7 +208,7 @@ namespace GroundBuffer {
 		pPixelShader->IncRefCount();
 
 		const D3DVERTEXELEMENT9 kElements[] = {
-			{ 0, 0,  D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
+			{ 0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
 			{ 0, 12, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
 			D3DDECL_END()
 		};
@@ -380,18 +380,18 @@ namespace GroundBuffer {
 		D3DXMatrixMultiply(&kWorldToField, &kEyeTranslation, &kFieldViewProj);
 		D3DXMatrixInverse(&kFieldToWorld, nullptr, &kWorldToField);
 
-		const float fDepthParams[4]			= { kFrustum.m_fNear, kFrustum.m_fFar - kFrustum.m_fNear, kFrustum.m_fNear * kFrustum.m_fFar, 0.0f };
-		const float fProjectionParams[4]	= { arProjection._11, arProjection._22, arProjection._31, arProjection._32 };
+		const float fDepthParams[4] = { kFrustum.m_fNear, kFrustum.m_fFar - kFrustum.m_fNear, kFrustum.m_fNear * kFrustum.m_fFar, 0.0f };
+		const float fProjectionParams[4] = { arProjection._11, arProjection._22, arProjection._31, arProjection._32 };
 		const float fViewToWorld[3][4] = {
 			{ arView._11, arView._21, arView._31, 0.0f },
 			{ arView._12, arView._22, arView._32, 0.0f },
 			{ arView._13, arView._23, arView._33, 0.0f },
 		};
-		const float fFieldParams[4]			= { 1.0f / FIELD_SIZE, 1.0f / FIELD_SIZE, Settings::fMaxDistance, 0.0f };
-		const float fTexelSize[4]			= { 1.0f / uiGroundWidth, 1.0f / uiGroundHeight, 0.0f, 0.0f };
-		const float fGroundParams[4]		= { abHeightLayout ? 1.0f : 0.0f, Settings::fBlendRange, Settings::bUnrolledMapping ? 1.0f : 0.0f, Settings::eDebugMode == Settings::DEBUG_RAW_VERTEX_COLOR ? 1.0f : 0.0f };
-		const float fEyePosition[4]			= { kEye.x, kEye.y, kEye.z, 0.0f };
-		const float fBlendParams[4]			= { Settings::fBlendRangeOrthoFactor, 0.0f, 0.0f, 0.0f };
+		const float fFieldParams[4] = { 1.0f / FIELD_SIZE, 1.0f / FIELD_SIZE, Settings::fMaxDistance, 0.0f };
+		const float fTexelSize[4] = { 1.0f / uiGroundWidth, 1.0f / uiGroundHeight, 0.0f, 0.0f };
+		const float fGroundParams[4] = { abHeightLayout ? 1.0f : 0.0f, Settings::fBlendRange, Settings::bUnrolledMapping ? 1.0f : 0.0f, Settings::eDebugMode == Settings::DEBUG_RAW_VERTEX_COLOR ? 1.0f : 0.0f };
+		const float fEyePosition[4] = { kEye.x, kEye.y, kEye.z, 0.0f };
+		const float fBlendParams[4] = { Settings::fBlendRangeOrthoFactor, 0.0f, 0.0f, 0.0f };
 
 		apDevice->SetPixelShaderConstantF(0, fDepthParams, 1);
 		apDevice->SetPixelShaderConstantF(1, fProjectionParams, 1);
@@ -461,10 +461,10 @@ namespace GroundBuffer {
 		}
 
 		const FullscreenVertex kQuad[4] = {
-			{ -1.0f,  1.0f, 0.0f, 0.0f, 0.0f },
-			{  1.0f,  1.0f, 0.0f, 1.0f, 0.0f },
+			{ -1.0f, 1.0f, 0.0f, 0.0f, 0.0f },
+			{ 1.0f, 1.0f, 0.0f, 1.0f, 0.0f },
 			{ -1.0f, -1.0f, 0.0f, 0.0f, 1.0f },
-			{  1.0f, -1.0f, 0.0f, 1.0f, 1.0f },
+			{ 1.0f, -1.0f, 0.0f, 1.0f, 1.0f },
 		};
 		apDevice->DrawPrimitiveUP(D3DPT_TRIANGLESTRIP, 2, kQuad, sizeof(FullscreenVertex));
 
