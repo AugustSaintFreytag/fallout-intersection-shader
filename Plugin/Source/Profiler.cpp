@@ -16,7 +16,7 @@ namespace Profiler {
 
 	static constexpr uint32_t	SET_COUNT			= 4;	// Frames in flight before a set is read again
 	static constexpr double		LOG_INTERVAL		= 5.0;	// Seconds
-	static constexpr const char*	STAGE_NAMES[STAGE_COUNT] = { "field", "ground", "overlay" };
+	static constexpr const char*	STAGE_NAMES[STAGE_COUNT] = { "toppers", "field", "ground", "overlay" };
 
 	// The queries of one frame.
 	struct QuerySet {
@@ -47,12 +47,17 @@ namespace Profiler {
 	// Log Interval
 	static Accumulator			kStageTimes[STAGE_COUNT];
 	static Accumulator			kReplayCpu;
+	static Accumulator			kCallbackCpu;
+	static Accumulator			kTopperCpu;
+	static Accumulator			kResolveCpu;
+	static uint32_t				uiCallbackFrames		= 0;
 	static Accumulator			kPasses;
 	static Accumulator			kDrawn;
 	static Accumulator			kSkipped;
 	static uint32_t				uiForeignDraws			= 0;
 	static Accumulator			kScreens;
 	static Accumulator			kTagged;
+	static Accumulator			kToppers;
 	static Accumulator			kDistant;
 	static uint32_t				uiTagFrames				= 0;
 	static uint32_t				uiGpuFrames				= 0;
@@ -168,20 +173,30 @@ namespace Profiler {
 				kDrawn.dSum / uiReplayFrames, kDrawn.dMax, kSkipped.dSum / uiReplayFrames, kSkipped.dMax, uiForeignDraws,
 				kScreens.dSum / uiReplayFrames, kScreens.dMax);
 		}
+		if (uiCallbackFrames) {
+			_MESSAGE("Profile, CPU ms avg/max: callback %.2f/%.2f, of it topper replay %.2f/%.2f, of it depth resolves %.2f/%.2f",
+				kCallbackCpu.dSum / uiCallbackFrames, kCallbackCpu.dMax, kTopperCpu.dSum / uiCallbackFrames, kTopperCpu.dMax,
+				kResolveCpu.dSum / uiCallbackFrames, kResolveCpu.dMax);
+		}
 		if (uiTagFrames) {
-			_MESSAGE("Profile, tags: tagged geometry avg/max %.1f/%.0f, beyond max distance avg/max %.1f/%.0f",
-				kTagged.dSum / uiTagFrames, kTagged.dMax, kDistant.dSum / uiTagFrames, kDistant.dMax);
+			_MESSAGE("Profile, tags: tagged geometry avg/max %.1f/%.0f, of it toppers avg/max %.1f/%.0f, beyond max distance avg/max %.1f/%.0f",
+				kTagged.dSum / uiTagFrames, kTagged.dMax, kToppers.dSum / uiTagFrames, kToppers.dMax, kDistant.dSum / uiTagFrames, kDistant.dMax);
 		}
 
 		for (Accumulator& rTime : kStageTimes)
 			rTime = {};
 		kReplayCpu = {};
+		kCallbackCpu = {};
+		kTopperCpu = {};
+		kResolveCpu = {};
+		uiCallbackFrames = 0;
 		kPasses = {};
 		kDrawn = {};
 		kSkipped = {};
 		uiForeignDraws = 0;
 		kScreens = {};
 		kTagged = {};
+		kToppers = {};
 		kDistant = {};
 		uiTagFrames = 0;
 		uiGpuFrames = 0;
@@ -258,12 +273,26 @@ namespace Profiler {
 		uiReplayFrames++;
 	}
 
-	// Records the eligible geometry of one tagged opaque stage: tagged, and left untagged beyond `fMaxDistance`.
-	void RecordTags(uint32_t auiTagged, uint32_t auiDistant) {
+	// Records the CPU time of one post-resolve callback, of the topper replay in it, and of the depth resolves in that.
+	// Waits for the GPU inside a call show up here and not in the GPU times.
+	void RecordCallbackCpu(double adCallbackMilliseconds, double adTopperMilliseconds, double adResolveMilliseconds) {
+		if (!Settings::bProfile)
+			return;
+
+		kCallbackCpu.Add(adCallbackMilliseconds);
+		kTopperCpu.Add(adTopperMilliseconds);
+		kResolveCpu.Add(adResolveMilliseconds);
+		uiCallbackFrames++;
+	}
+
+	// Records the eligible geometry of one tagged opaque stage: tagged, tagged as toppers, and left untagged beyond
+	// `fMaxDistance`.
+	void RecordTags(uint32_t auiTagged, uint32_t auiToppers, uint32_t auiDistant) {
 		if (!Settings::bProfile)
 			return;
 
 		kTagged.Add(auiTagged);
+		kToppers.Add(auiToppers);
 		kDistant.Add(auiDistant);
 		uiTagFrames++;
 	}

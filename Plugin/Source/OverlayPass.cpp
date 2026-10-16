@@ -9,6 +9,8 @@
 #include "Settings.hpp"
 #include "StencilTags.hpp"
 #include "TerrainPasses.hpp"
+#include "TopperCrop.hpp"
+#include "TopperPasses.hpp"
 
 #include "Bethesda/BSShaderAccumulator.hpp"
 #include "Gamebryo/NiCamera.hpp"
@@ -64,12 +66,14 @@ namespace OverlayPass {
 	// Call once the D3D device exists, at NVSE DeferredInit.
 	void Initialize() {
 		const bool bShadersReady = GroundShaders::Load();
+		TopperPasses::Initialize();
+		TopperCrop::Initialize();
 		GroundBuffer::Initialize();
 		DrawRedirect::Initialize();
 		if (bShadersReady && !DrawRedirect::IsReady())
 			_MESSAGE("Terrain overlay disabled: draw redirect not available");
 		bOverlayReady = bShadersReady && DrawRedirect::IsReady();
-		StencilTags::SetEnabled(bOverlayReady || Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS);
+		StencilTags::SetEnabled(bOverlayReady || Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS);
 		Profiler::Initialize();
 
 		pDebugVS = Dependencies::CreateVertexShader("IntersectionBlend\\DebugDepth.vso");
@@ -353,6 +357,8 @@ namespace OverlayPass {
 			// The scissor limits each triangle to the screen rectangle of its block (`GetBlockScissor`).
 			kStates.Force(D3DRS_CULLMODE, D3DCULL_NONE);
 			kStates.Force(D3DRS_SCISSORTESTENABLE, TRUE);
+			// The game can leave a user clip plane on after the opaque stage, depending on the view. It would cut the triangles.
+			kStates.Force(D3DRS_CLIPPLANEENABLE, 0);
 
 			// The game's render state cache does not hold the scissor rectangle. Restore it on the device.
 			RECT kSavedScissor;
@@ -410,7 +416,7 @@ namespace OverlayPass {
 		return uiPasses;
 	}
 
-	// Draws the full-screen debug view for the current debug mode: depth bands, stencil tags or ground height.
+	// Draws the full-screen debug view for the current debug mode: depth bands, stencil tags, topper tags or ground height.
 	// The given texture is the scene depth, or the ground buffer for the ground height view.
 	static void DrawDebugView(IDirect3DDevice9* apDevice, const NiCamera* apCamera, IDirect3DBaseTexture9* apTexture) {
 		// Capture all device state and restore it afterwards. The game's render state cache then stays valid.
@@ -432,12 +438,13 @@ namespace OverlayPass {
 
 		apDevice->SetRenderState(D3DRS_ZENABLE, D3DZB_FALSE);
 		apDevice->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
-		if (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || IsAttributeView()) {
+		if (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS || IsAttributeView()) {
+			const uint32_t uiBit = Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS ? StencilTags::TOPPER_BIT : StencilTags::TERRAIN_BLEND_BIT;
 			apDevice->SetRenderState(D3DRS_STENCILENABLE, TRUE);
 			apDevice->SetRenderState(D3DRS_TWOSIDEDSTENCILMODE, FALSE);
 			apDevice->SetRenderState(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
-			apDevice->SetRenderState(D3DRS_STENCILREF, StencilTags::TERRAIN_BLEND_BIT);
-			apDevice->SetRenderState(D3DRS_STENCILMASK, StencilTags::TERRAIN_BLEND_BIT);
+			apDevice->SetRenderState(D3DRS_STENCILREF, uiBit);
+			apDevice->SetRenderState(D3DRS_STENCILMASK, uiBit);
 			apDevice->SetRenderState(D3DRS_STENCILWRITEMASK, 0);
 		}
 		else {
@@ -445,6 +452,7 @@ namespace OverlayPass {
 		}
 		apDevice->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
 		apDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+		apDevice->SetRenderState(D3DRS_CLIPPLANEENABLE, 0);
 		apDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
 		apDevice->SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
 		apDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
@@ -507,17 +515,28 @@ namespace OverlayPass {
 		bRendering = uiCallbacks != 0;
 	}
 
-	// Renders the ground buffer, the terrain overlay and the debug views for the frame, then clears the stencil tags.
+	// Draws the deferred toppers, then renders the ground buffer, the terrain overlay and the debug views for the frame.
+	// Clears the stencil tags at the end.
 	void __cdecl OnPostResolveDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture) {
 		uiFrameCallbacks++;
 
-		if (!Settings::bEnabled || !apAccumulator || !apAccumulator->m_pkCamera || !apDepthTexture) {
-			TerrainPasses::Clear();
-			return;
-		}
-
+		const LARGE_INTEGER kCallbackStart = GetCounter();
 		IDirect3DDevice9* pDevice = NiDX9Renderer::GetSingleton()->GetD3DDevice();
 		Profiler::BeginFrame(pDevice);
+
+		// Toppers left out of the opaque stage are drawn in any case.
+		const uint32_t uiTopperPasses = apAccumulator && apTarget ? TopperPasses::Replay(apAccumulator, apTarget, apDepthTexture) : 0;
+		TopperPasses::Clear();
+		Profiler::EndStage(Profiler::STAGE_TOPPERS);
+		const double dTopperMilliseconds = GetMillisecondsSince(kCallbackStart);
+		const double dResolveMilliseconds = TopperPasses::ConsumeResolveMilliseconds();
+
+		if (!Settings::bEnabled || !apAccumulator || !apAccumulator->m_pkCamera || !apDepthTexture) {
+			TerrainPasses::Clear();
+			Profiler::RecordCallbackCpu(GetMillisecondsSince(kCallbackStart), dTopperMilliseconds, dResolveMilliseconds);
+			Profiler::EndFrame();
+			return;
+		}
 
 		// Without tags from this frame, the stencil buffer holds nothing for the overlay to test against.
 		const bool bTagged = StencilTags::HasTags(apTarget);
@@ -537,7 +556,7 @@ namespace OverlayPass {
 			pGroundTexture = GroundBuffer::Render(pDevice, apAccumulator->m_pkCamera, apTarget, apDepthTexture, bHeightView);
 
 		// Draw before the overlay. The overlay clears the tags it draws over.
-		if (bDebugReady && Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS && bTagged)
+		if (bDebugReady && (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS) && bTagged)
 			DrawDebugView(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
 		else if (bDebugReady && bAttributeView && bTagged && pGroundTexture)
 			DrawDebugView(pDevice, apAccumulator->m_pkCamera, GroundBuffer::GetPointTexture());
@@ -555,12 +574,14 @@ namespace OverlayPass {
 
 		StencilTags::Clear(pDevice);
 		const StencilTags::GeometryCounts kTagCounts = StencilTags::ConsumeGeometryCounts();
-		Profiler::RecordTags(kTagCounts.uiTagged, kTagCounts.uiDistant);
+		Profiler::RecordTags(kTagCounts.uiTagged, kTagCounts.uiToppers, kTagCounts.uiDistant);
+		Profiler::RecordCallbackCpu(GetMillisecondsSince(kCallbackStart), dTopperMilliseconds, dResolveMilliseconds);
 		Profiler::EndFrame();
 
 		if (uiLoggedFrames < 3) {
 			const NiFrustum& kFrustum = apAccumulator->m_pkCamera->m_kViewFrustum;
-			_MESSAGE("Post-resolve callback: target %p, depth %p, near %.2f, far %.2f, stencil tags %u, %u landscape passes replayed", apTarget, apDepthTexture, kFrustum.m_fNear, kFrustum.m_fFar, bTagged, uiPasses);
+			_MESSAGE("Post-resolve callback: target %p, depth %p, near %.2f, far %.2f, stencil tags %u, %u topper passes and %u landscape passes replayed",
+				apTarget, apDepthTexture, kFrustum.m_fNear, kFrustum.m_fFar, bTagged, uiTopperPasses, uiPasses);
 			uiLoggedFrames++;
 		}
 	}

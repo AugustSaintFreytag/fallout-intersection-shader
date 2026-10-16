@@ -312,6 +312,7 @@ namespace GroundBuffer {
 			kStates.Force(D3DRS_ADAPTIVETESS_Y, 0); // Alpha to coverage, NVIDIA only.
 			kStates.Force(D3DRS_STENCILENABLE, FALSE);
 			kStates.Force(D3DRS_SCISSORTESTENABLE, FALSE);
+			kStates.Force(D3DRS_CLIPPLANEENABLE, 0);
 			kStates.Force(D3DRS_CULLMODE, D3DCULL_NONE);
 
 			// Set on the device directly. LOD Flicker Fix remaps every `D3DRS_ZFUNC` set through `NiDX9RenderState`.
@@ -412,6 +413,7 @@ namespace GroundBuffer {
 		apDevice->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
 		apDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, FALSE);
 		apDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+		apDevice->SetRenderState(D3DRS_CLIPPLANEENABLE, 0);
 		apDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
 		apDevice->SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
 		apDevice->SetRenderState(D3DRS_SRGBWRITEENABLE, FALSE);

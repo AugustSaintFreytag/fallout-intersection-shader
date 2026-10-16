@@ -7,6 +7,7 @@
 #include "Settings.hpp"
 #include "StencilTags.hpp"
 #include "TerrainPasses.hpp"
+#include "TopperPasses.hpp"
 
 BS_ALLOCATORS
 
@@ -30,6 +31,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* apMessage) {
 			// Runs before the frame is rendered. Drops passes of a frame that got no depth callback.
 			OverlayPass::OnMainLoop();
 			TerrainPasses::Clear();
+			TopperPasses::Clear();
 			break;
 	}
 }

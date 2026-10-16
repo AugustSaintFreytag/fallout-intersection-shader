@@ -1,5 +1,5 @@
 diff --git a/DepthResolve/main.cpp b/DepthResolve/main.cpp
-index d3541b1..7dd2fd2 100644
+index d3541b1..1fc1e6b 100644
 --- a/DepthResolve/main.cpp
 +++ b/DepthResolve/main.cpp
 @@ -32,6 +32,10 @@ static bool bNVAPI;
@@ -26,7 +26,7 @@ index d3541b1..7dd2fd2 100644
  			if (!kPostDepthEffects.empty()) {
  				BSRenderedTexture::StopOffscreen();
  				for (const auto& pEffect : kPostDepthEffects) {
-@@ -373,6 +383,13 @@ EXTERN_DLL_EXPORT void __cdecl AppendPostDepthEffect(ImageSpaceEffect* apEffect)
+@@ -373,6 +383,20 @@ EXTERN_DLL_EXPORT void __cdecl AppendPostDepthEffect(ImageSpaceEffect* apEffect)
  	kPostDepthEffects.push_back(apEffect);
  }
  
@@ -35,6 +35,13 @@ index d3541b1..7dd2fd2 100644
 +		return;
 +
 +	kPostResolveDepthCallbacks.push_back(apCallback);
++}
++
++// Resolves the depth of the given render target into the depth texture again.
++// For post-resolve callbacks that draw depth into the scene.
++EXTERN_DLL_EXPORT void __cdecl ResolveSceneDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget) {
++	if (apAccumulator && apTarget)
++		BSShaderAccumulatorEx::ResolveDepth(apAccumulator, apTarget);
 +}
 +
  EXTERN_DLL_EXPORT bool NVSEPlugin_Query(const NVSEInterface* nvse, PluginInfo* info) {

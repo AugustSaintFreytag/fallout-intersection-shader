@@ -16,6 +16,8 @@ namespace TerrainPasses {
 
 	void InstallHooks();
 
+	void DrawPass(void* apRenderPass, uint32_t auiPassType, uint32_t auiArg2, uint32_t auiArg3, uint32_t auiArg4);
+
 	void Clear();
 
 	// A filter that decides per recorded pass whether to draw it, by its landscape geometry.
