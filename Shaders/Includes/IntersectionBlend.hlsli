@@ -1,4 +1,6 @@
-// Blend math for the terrain overlay pass.
+// Blend math for the terrain overlay and the topper crop.
+
+#include "Noise.hlsli"
 
 // Height within which the visible surface touches the terrain and blends fully, in game units.
 static const float SelfHeight = 0.5f;
@@ -40,6 +42,18 @@ float IntersectionBlendFactor(float height, float3 groundNormal, float3 surfaceN
     float surfaceFade = 1.0f - smoothstep(SelfHeight, max(blendRange, SelfHeight + MinBlendRange), contactDistance);
     float climbFade = 1.0f - smoothstep(SelfHeight, max(climbHeight, SelfHeight + MinBlendRange), height);
     return min(surfaceFade, climbFade);
+}
+
+// Lowest reach of an edge. Keeps the contact line covered where the height and noise are lowest.
+static const float MinEdgeReach = 0.15f;
+
+// Returns the reach of a hard edge at a world position, in [`MinEdgeReach`, 1].
+// The edge lies where a blend amount, 1 at the contact line and 0 at the end of its range, equals 1 minus the reach.
+// The reach is 0.5, raised by grain noise and by the material height where it is known (0.5 elsewhere).
+// The terrain overlay and the topper crop both cut with it, so their edges look alike.
+float GetEdgeReach(float2 world, float materialHeight, float heightInfluence, float noiseAmount, float grainSize) {
+    float noise = GrainNoise(world, grainSize) * 2.0f - 1.0f;
+    return clamp(0.5f + heightInfluence * (materialHeight - 0.5f) + noiseAmount * noise, MinEdgeReach, 1.0f);
 }
 
 // Size of a landscape block, a quarter of a cell. Blocks lie on a world-aligned grid.

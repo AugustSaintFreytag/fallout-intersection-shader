@@ -13,7 +13,6 @@
 
 #include "../Includes/Depth.hlsli"
 #include "../Includes/IntersectionBlend.hlsli"
-#include "../Includes/Noise.hlsli"
 
 sampler2D SceneDepth : register(s0);    // INTZ, reversed depth
 sampler2D BaseDepth : register(s1);     // R32F copy of the scene depth without toppers, CROP only
@@ -23,7 +22,8 @@ float4 ProjectionParams : register(c1); // x = _11, y = _22, z = _31, w = _32 of
 float4 ViewToWorld[3] : register(c2);   // Rows: view space x, y and z axes in world orientation
 float4 ScreenParams : register(c5);     // x, y = screen texel size
 float4 EyePosition : register(c6);      // xyz = camera position in world space
-float4 CropParams : register(c7);       // x = crop height, y = noise feature size, z = 1 for debug mode 10
+float4 CropParams : register(c7);       // x = crop height, y = edge grain size, z = 1 for debug mode 10,
+                                        // w = edge noise amount
 
 // Lowest z of the base normal that counts as floor. About 45 degrees of slope.
 static const float FloorNormalZ = 0.7f;
@@ -89,7 +89,9 @@ PS_OUTPUT main(float2 vpos : VPOS) {
     normal *= dot(normal, base) > 0.0f ? -1.0f : 1.0f;
 
     float height = dot(topper - base, normal);
-    float threshold = CropParams.x * WorldNoise(EyePosition.xy + topper.xy, CropParams.y);
+    // The same edge as the terrain overlay, with the blend amount 1 - height / crop height. Toppers have no material
+    // height here. Their colour is drawn after the crop.
+    float threshold = CropParams.x * GetEdgeReach(EyePosition.xy + topper.xy, 0.5f, 0.0f, CropParams.w, CropParams.y);
     bool isFloor = normal.z >= FloorNormalZ;
     bool cropped = !equalDepths && isFloor && height < threshold;
     clip(cropped || debugCause ? 1.0f : -1.0f);

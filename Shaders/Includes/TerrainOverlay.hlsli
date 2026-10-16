@@ -8,7 +8,6 @@
 // The terrain shaders of VPT and Parallax use c0-c88 and s0-s13. Overlay registers start at c89 and s14.
 
 #include "IntersectionBlend.hlsli"
-#include "Noise.hlsli"
 #include "Packing.hlsli"
 
 float4 IBOverlayParams : register(c89); // x = debug mode, y = 1 for the hard edge, z = edge height influence,
@@ -18,7 +17,7 @@ float4 IBScreenParams : register(c91);  // x = 1 / width, y = 1 / height
 float4 IBBlock : register(c92);         // xy = grid index of the landscape block being drawn
 float4 IBModelEye : register(c93);      // xyz = camera position in the block's model space
 float4 IBFogRows[3] : register(c94);    // Eye-relative world position to the fog position (clip x, y, w - z)
-float4 IBEdgeParams : register(c97);    // x = edge noise feature size, y = blend range, z = edge softness
+float4 IBEdgeParams : register(c97);    // x = edge grain size, y = blend range
 
 // Written by the ground buffer pass: ground points (s14) and their packed attributes (s15).
 //
@@ -133,9 +132,6 @@ static const float LumaContrast = 2.0f;
 // Mip level that samples the mean colour of a texture. Higher levels clamp to the smallest mip.
 static const float MeanMipLevel = 12.0f;
 
-// Lowest reach of the material. Keeps the contact line covered where the height and noise are lowest.
-static const float MinEdgeReach = 0.15f;
-
 // Width of the antialiased edge, in blend amount per pixel footprint over the blend range.
 // The blend amount falls by up to 1.5 per blend range, at the middle of its `smoothstep`.
 static const float EdgeAntialiasSlope = 1.5f;
@@ -160,20 +156,18 @@ float GetMaterialHeight(float2 uv, float2 dx, float2 dy, int texCount, sampler2D
 
 // Returns the opacity of an overlay pixel.
 //
-// With the hard edge, the material is present where the blend amount exceeds 1 minus its reach. The reach rises with
-// the material height and world-space noise. High spots of the texture reach further up the static and low spots drop
-// out first. The edge is antialiased over about a pixel, from the pixel footprint of the ground point. The edge
-// softness widens it, in blend amount.
+// With the hard edge, the material is present where the blend amount exceeds 1 minus its reach (`GetEdgeReach`).
+// High spots of the texture reach further up the static and low spots drop out first. The edge is antialiased over
+// about a pixel, from the pixel footprint of the ground point.
 // Without the hard edge, the blend amount is the opacity.
 float GetOverlayAlpha(GroundSample ground, float materialHeight) {
     [branch] if (IBOverlayParams.y < 0.5f)
         return ground.amount * ground.distanceFade;
 
     float2 world = ground.position.xy - IBModelEye.xy + IBEyePosition.xy;
-    float noise = WorldNoise(world, IBEdgeParams.x) * 2.0f - 1.0f;
-    float reach = clamp(0.5f + IBOverlayParams.z * (materialHeight - 0.5f) + IBOverlayParams.w * noise, MinEdgeReach, 1.0f);
+    float reach = GetEdgeReach(world, materialHeight, IBOverlayParams.z, IBOverlayParams.w, IBEdgeParams.x);
 
     float footprint = max(length(ground.uvDx), length(ground.uvDy)) * TerrainUVScale;
-    float width = max(footprint * EdgeAntialiasSlope / IBEdgeParams.y, max(IBEdgeParams.z, MinEdgeWidth));
+    float width = max(footprint * EdgeAntialiasSlope / IBEdgeParams.y, MinEdgeWidth);
     return saturate((ground.amount + reach - 1.0f) / width) * ground.distanceFade;
 }

@@ -27,12 +27,10 @@ namespace Settings {
 	inline float fBlendRange = 48.0f; // Game units along the surface, ~70 cm
 	inline float fBlendClimbHeight = 12.0f; // Game units above the terrain, ~17 cm
 	inline bool bHardEdge = true; // Off: the overlay fades out over the blend range.
-	inline float fEdgeHeightInfluence = 0.5f; // 0-2, how far the material height moves the hard edge
-	inline float fEdgeNoise = 0.25f; // 0-1, how far world-space noise moves the hard edge
-	inline float fEdgeNoiseScale = 24.0f; // Game units, size of the edge noise features
-	inline float fEdgeSoftness = 0.0f; // 0-1, width of the edge in blend amount. 0 is hard, 1 fades over the whole range.
+	inline float fEdgeHeightInfluence = 0.5f; // 0-2, how far the material height moves the terrain edge
+	inline float fEdgeNoise = 0.25f; // 0-1, how far grain noise moves the terrain edge and the topper crop
+	inline float fEdgeGrainSize = 4.0f; // Game units, ~6 cm
 	inline float fCropHeight = 6.0f; // Game units above the floor, ~9 cm. 0 turns the crop off.
-	inline float fCropScale = 8.0f; // Game units, size of the crop noise features
 	inline std::vector<uint8_t> kBlendTypesTerrainToStatic; // Base form type IDs
 	inline std::vector<std::string> kTerrainToStaticBlacklist; // Editor IDs of base forms
 	inline std::vector<std::string> kStaticToStaticWhitelist; // Editor IDs of base forms, the toppers

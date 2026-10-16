@@ -212,7 +212,7 @@ namespace TopperCrop {
 			{ rView._13, rView._23, rView._33, 0.0f },
 			{ 1.0f / uiWidth, 1.0f / uiHeight, 0.0f, 0.0f },
 			{ kEye.x, kEye.y, kEye.z, 0.0f },
-			{ Settings::fCropHeight, Settings::fCropScale, bCause ? 1.0f : 0.0f, 0.0f },
+			{ Settings::fCropHeight, Settings::fEdgeGrainSize, bCause ? 1.0f : 0.0f, Settings::fEdgeNoise },
 		};
 		apDevice->SetPixelShaderConstantF(0, fConstants[0], 8);
 
