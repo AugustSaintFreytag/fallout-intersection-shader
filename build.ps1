@@ -17,8 +17,10 @@ if (-not $SkipPlugin) {
 }
 
 if (-not $SkipShaders) {
+    # The compile script only sets an exit code when it fails.
+    $global:LASTEXITCODE = 0
     & (Join-Path $PSScriptRoot 'Shaders\compile.ps1') -Force:$Force
-    if ($LASTEXITCODE -ne 0) {
+    if ($global:LASTEXITCODE -ne 0) {
         throw "Shader compile failed (exit code $LASTEXITCODE)."
     }
 }
