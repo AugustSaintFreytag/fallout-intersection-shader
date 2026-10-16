@@ -46,8 +46,17 @@ namespace TopperCrop {
 	static IDirect3DTexture9*			pBaseTexture	= nullptr;	// R32F, reversed depth without toppers
 	static IDirect3DSurface9*			pBaseSurface	= nullptr;
 	static IDirect3DStateBlock9*		pStateBlock		= nullptr;
+	static IDirect3DQuery9*				pCropQuery		= nullptr;	// Samples the crop pass drew, read a frame later
 	static uint32_t						uiWidth			= 0;
 	static uint32_t						uiHeight		= 0;
+
+	// Crop Diagnostics
+	// The log gets a line whenever the crop pass switches between drawing samples and drawing none.
+	static constexpr uint32_t			MAX_LOG_LINES	= 200;
+	static bool							bQueryPending	= false;
+	static bool							bLastDrew		= false;
+	static uint32_t						uiLogLines		= 0;
+	static uint32_t						uiCropFrame		= 0;
 
 	template <typename T>
 	static void SafeRelease(T*& apObject) {
@@ -61,8 +70,10 @@ namespace TopperCrop {
 		SafeRelease(pBaseSurface);
 		SafeRelease(pBaseTexture);
 		SafeRelease(pStateBlock);
-		uiWidth		= 0;
-		uiHeight	= 0;
+		SafeRelease(pCropQuery);
+		bQueryPending	= false;
+		uiWidth			= 0;
+		uiHeight		= 0;
 	}
 
 	static bool __cdecl OnDeviceReset(bool abBeforeReset, void*) {
@@ -121,6 +132,10 @@ namespace TopperCrop {
 			return false;
 		}
 
+		// Diagnostics only. The crop works without it.
+		if (!pCropQuery && FAILED(apDevice->CreateQuery(D3DQUERYTYPE_OCCLUSION, &pCropQuery)))
+			pCropQuery = nullptr;
+
 		uiWidth		= kDesc.Width;
 		uiHeight	= kDesc.Height;
 		_MESSAGE("Topper crop base depth created (%u x %u)", uiWidth, uiHeight);
@@ -146,6 +161,8 @@ namespace TopperCrop {
 		apDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
 		apDevice->SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
 		apDevice->SetRenderState(D3DRS_SRGBWRITEENABLE, FALSE);
+		// The game can leave a user clip plane on after the opaque stage, depending on the view. It would cut the triangle.
+		apDevice->SetRenderState(D3DRS_CLIPPLANEENABLE, 0);
 		apDevice->SetVertexDeclaration(pDeclaration);
 		apDevice->SetVertexShader(pVertexShader->GetShaderHandle());
 		apDevice->SetPixelShader(apPixelShader->GetShaderHandle());
@@ -185,12 +202,31 @@ namespace TopperCrop {
 		return true;
 	}
 
+	// Logs whether the crop pass of an earlier frame drew any samples, when that changed. Never waits for the GPU.
+	static void LogQueryResult() {
+		DWORD uiSamples = 0;
+		if (!bQueryPending || pCropQuery->GetData(&uiSamples, sizeof(uiSamples), 0) != S_OK)
+			return;
+
+		bQueryPending = false;
+		const bool bDrew = uiSamples > 0;
+		if (bDrew != bLastDrew && uiLogLines < MAX_LOG_LINES) {
+			_MESSAGE("Topper crop, frame %u: crop pass %s (%u samples)", uiCropFrame, bDrew ? "draws" : "draws nothing", uiSamples);
+			uiLogLines++;
+		}
+		bLastDrew = bDrew;
+	}
+
 	// Crops toppers on floors: writes the base depth into pixels of the bound target where a topper lies within the crop
 	// height above a floor, and clears their topper bit. The given scene depth must hold the toppers.
 	// Call between the depth replay and the colour replay, after `CopyBaseDepth`.
 	void Crop(IDirect3DDevice9* apDevice, const NiCamera* apCamera, IDirect3DBaseTexture9* apDepthTexture) {
 		if (!pBaseTexture || !apCamera || !apDepthTexture)
 			return;
+
+		uiCropFrame++;
+		if (pCropQuery)
+			LogQueryResult();
 
 		pStateBlock->Capture();
 
@@ -200,6 +236,7 @@ namespace TopperCrop {
 		const D3DXMATRIX& rProjection = *pRenderer->GetD3DProj();
 		const NiFrustum& kFrustum = apCamera->m_kViewFrustum;
 		const NiPoint3& kEye = apCamera->m_kWorld.m_Translate;
+		const bool bCause = Settings::eDebugMode == Settings::DEBUG_TOPPER_CROP_CAUSE;
 		const float fConstants[8][4] = {
 			{ kFrustum.m_fNear, kFrustum.m_fFar - kFrustum.m_fNear, kFrustum.m_fNear * kFrustum.m_fFar, 0.0f },
 			{ rProjection._11, rProjection._22, rProjection._31, rProjection._32 },
@@ -208,7 +245,7 @@ namespace TopperCrop {
 			{ rView._13, rView._23, rView._33, 0.0f },
 			{ 1.0f / uiWidth, 1.0f / uiHeight, 0.0f, 0.0f },
 			{ kEye.x, kEye.y, kEye.z, 0.0f },
-			{ Settings::fCropHeight, Settings::fCropScale, 0.0f, 0.0f },
+			{ Settings::fCropHeight, Settings::fCropScale, bCause ? 1.0f : 0.0f, 0.0f },
 		};
 		apDevice->SetPixelShaderConstantF(0, fConstants[0], 8);
 
@@ -226,12 +263,20 @@ namespace TopperCrop {
 		apDevice->SetRenderState(D3DRS_STENCILPASS, D3DSTENCILOP_INVERT);
 		apDevice->SetRenderState(D3DRS_STENCILFAIL, D3DSTENCILOP_KEEP);
 		apDevice->SetRenderState(D3DRS_STENCILZFAIL, D3DSTENCILOP_KEEP);
-		// Debug mode 9 paints cropped pixels red. The colour replay does not draw over them.
-		const bool bTint = Settings::eDebugMode == Settings::DEBUG_TOPPER_CROP;
+		// Debug mode 9 paints cropped pixels red, mode 10 paints every candidate. The colour replay does not draw over them.
+		const bool bTint = Settings::eDebugMode == Settings::DEBUG_TOPPER_CROP || bCause;
 		apDevice->SetRenderState(D3DRS_COLORWRITEENABLE, bTint ? D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE : 0);
 		BindDepthTexture(apDevice, 0, apDepthTexture);
 		BindDepthTexture(apDevice, 1, pBaseTexture);
+
+		const bool bQuery = pCropQuery && !bQueryPending;
+		if (bQuery)
+			pCropQuery->Issue(D3DISSUE_BEGIN);
 		DrawTriangle(apDevice, pCropShader);
+		if (bQuery) {
+			pCropQuery->Issue(D3DISSUE_END);
+			bQueryPending = true;
+		}
 
 		pStateBlock->Apply();
 	}

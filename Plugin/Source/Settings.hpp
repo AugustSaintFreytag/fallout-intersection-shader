@@ -16,6 +16,7 @@ namespace Settings {
 		DEBUG_RAW_VERTEX_COLOR	= 7, // Draws the vertex colour at the ground point as written by the ground pass, unpacked.
 		DEBUG_TOPPER_TAGS	= 8, // Tints every pixel tagged as a topper for static-to-static blending.
 		DEBUG_TOPPER_CROP	= 9, // Paints the pixels the topper crop cuts away red.
+		DEBUG_TOPPER_CROP_CAUSE	= 10, // Paints every crop candidate by why it is cropped or not.
 	};
 
 	inline bool						bEnabled				= true;

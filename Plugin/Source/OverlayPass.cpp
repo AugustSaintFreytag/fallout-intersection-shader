@@ -357,6 +357,8 @@ namespace OverlayPass {
 			// The scissor limits each triangle to the screen rectangle of its block (`GetBlockScissor`).
 			kStates.Force(D3DRS_CULLMODE, D3DCULL_NONE);
 			kStates.Force(D3DRS_SCISSORTESTENABLE, TRUE);
+			// The game can leave a user clip plane on after the opaque stage, depending on the view. It would cut the triangles.
+			kStates.Force(D3DRS_CLIPPLANEENABLE, 0);
 
 			// The game's render state cache does not hold the scissor rectangle. Restore it on the device.
 			RECT kSavedScissor;
@@ -450,6 +452,7 @@ namespace OverlayPass {
 		}
 		apDevice->SetRenderState(D3DRS_ALPHATESTENABLE, FALSE);
 		apDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+		apDevice->SetRenderState(D3DRS_CLIPPLANEENABLE, 0);
 		apDevice->SetRenderState(D3DRS_CULLMODE, D3DCULL_NONE);
 		apDevice->SetRenderState(D3DRS_FILLMODE, D3DFILL_SOLID);
 		apDevice->SetRenderState(D3DRS_ALPHABLENDENABLE, TRUE);
@@ -524,6 +527,15 @@ namespace OverlayPass {
 		const uint32_t uiTopperPasses = apAccumulator && apTarget ? TopperPasses::Replay(apAccumulator, apTarget, apDepthTexture) : 0;
 		TopperPasses::Clear();
 		Profiler::EndStage(Profiler::STAGE_TOPPERS);
+
+		// Diagnostics: a line whenever the frames switch between having deferred toppers and having none.
+		static bool		bHadToppers			= false;
+		static uint32_t	uiTopperLogLines	= 0;
+		if ((uiTopperPasses != 0) != bHadToppers && uiTopperLogLines < 200) {
+			_MESSAGE("Toppers, callback %u: %u topper passes replayed", uiFrameCallbacks, uiTopperPasses);
+			uiTopperLogLines++;
+		}
+		bHadToppers = uiTopperPasses != 0;
 
 		if (!Settings::bEnabled || !apAccumulator || !apAccumulator->m_pkCamera || !apDepthTexture) {
 			TerrainPasses::Clear();

@@ -18,6 +18,8 @@ namespace StencilTags {
 	uint32_t BeginPass(const void* apRenderPass);
 	void EndPass();
 
+	bool KeepsTags();
+
 	uint32_t ConsumeTaggedStageCount();
 
 	// Eligible geometry seen during tagging.

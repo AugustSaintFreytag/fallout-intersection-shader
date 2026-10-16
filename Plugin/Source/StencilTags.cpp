@@ -19,8 +19,9 @@
 //
 // The opaque stage runs with stencil writes forced on. Every batch-rendered pass replaces the tag bits. Statics that
 // may blend with terrain set `TERRAIN_BLEND_BIT`, toppers for static-to-static blending set `TOPPER_BIT`. Everything
-// else clears both where it draws in front, such as terrain, actors and other statics. The overlay pass only draws
-// where `TERRAIN_BLEND_BIT` is set. The stencil buffer is cleared after it.
+// else clears both where it draws in front, such as terrain, actors and other statics. Draws without depth writes
+// leave the tags alone (`KeepsTags`). The overlay pass only draws where `TERRAIN_BLEND_BIT` is set. The stencil buffer
+// is cleared after it.
 //
 // A reference may blend with terrain if its base form type is in the INI type list and its base form is not
 // blacklisted. It is a topper if its base form is in the topper list. Both lists take editor IDs. Most editor IDs
@@ -262,6 +263,15 @@ namespace StencilTags {
 		// Draws outside the batch renderer (sky, LOD) must not inherit the tag.
 		if (pTaggingStates)
 			pTaggingStates->Update(D3DRS_STENCILREF, 0);
+	}
+
+	// Returns whether the coming draw has to leave the tags alone: a draw in the tagging window without depth writes.
+	//
+	// Such draws lie on surfaces drawn before them and hide nothing, such as decals and additive light passes. With the
+	// stencil write mask of the window they would clear the tags of the surface under them. Which of them the game draws
+	// changes with the camera.
+	bool KeepsTags() {
+		return pTaggingStates && !NiDX9Renderer::GetSingleton()->m_pkRenderState->m_akRenderStateSettings[D3DRS_ZWRITEENABLE].m_uiCurrValue;
 	}
 
 	// Returns the number of opaque stages tagged since the last call and resets it. For diagnostics.

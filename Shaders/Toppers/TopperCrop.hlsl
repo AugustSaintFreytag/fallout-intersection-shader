@@ -7,6 +7,7 @@
 // the topper above the plane of the base, along the base normal, and compares it with a noise threshold. Below the
 // threshold, the pixel is cropped: it writes the base depth, and the stencil op clears the topper bit. The colour
 // replay of the toppers then skips it. Only floors crop. Other pixels are discarded.
+// In debug mode 10 no pixel is discarded. Each one shows why it is cropped or not (`GetCauseColor`).
 //
 // Reference at "Plugin/Source/TopperCrop.cpp".
 
@@ -21,7 +22,7 @@ float4 ProjectionParams : register(c1); // x = _11, y = _22, z = _31, w = _32 of
 float4 ViewToWorld[3] : register(c2);   // Rows: view space x, y and z axes in world orientation
 float4 ScreenParams : register(c5);     // x, y = screen texel size
 float4 EyePosition : register(c6);      // xyz = camera position in world space
-float4 CropParams : register(c7);       // x = crop height, y = noise feature size
+float4 CropParams : register(c7);       // x = crop height, y = noise feature size, z = 1 for debug mode 10
 
 // Lowest z of the base normal that counts as floor. About 45 degrees of slope.
 static const float FloorNormalZ = 0.7f;
@@ -85,12 +86,24 @@ struct PS_OUTPUT {
     float depth : DEPTH;
 };
 
+// Returns the debug mode 10 colour of a crop candidate: red cropped, green floor above the threshold, blue not a floor,
+// yellow equal depths.
+float4 GetCauseColor(bool equalDepths, bool isFloor, bool cropped) {
+    if (equalDepths)
+        return float4(1.0f, 1.0f, 0.0f, 1.0f);
+    if (!isFloor)
+        return float4(0.0f, 0.0f, 1.0f, 1.0f);
+    return cropped ? float4(1.0f, 0.0f, 0.0f, 1.0f) : float4(0.0f, 1.0f, 0.0f, 1.0f);
+}
+
 PS_OUTPUT main(float2 vpos : VPOS) {
     // Both depths are resolved from the first sample. At a topper silhouette that sample can lie on the base.
     // The depths are then equal, and the topper samples of the pixel are not measured.
     float baseDepth = SampleDepth(BaseDepth, vpos);
     float topperDepth = SampleDepth(SceneDepth, vpos);
-    clip(topperDepth != baseDepth ? 1.0f : -1.0f);
+    bool debugCause = CropParams.z > 0.5f;
+    bool equalDepths = topperDepth == baseDepth;
+    clip(!equalDepths || debugCause ? 1.0f : -1.0f);
 
     float3 base = GetPosition(vpos, baseDepth);
     float3 topper = GetPosition(vpos, topperDepth);
@@ -103,11 +116,14 @@ PS_OUTPUT main(float2 vpos : VPOS) {
 
     float height = dot(topper - base, normal);
     float threshold = CropParams.x * CropNoise(EyePosition.xy + topper.xy, CropParams.y);
-    clip(normal.z >= FloorNormalZ && height < threshold ? 1.0f : -1.0f);
+    bool isFloor = normal.z >= FloorNormalZ;
+    bool cropped = !equalDepths && isFloor && height < threshold;
+    clip(cropped || debugCause ? 1.0f : -1.0f);
 
+    // In debug mode 10 every candidate loses the topper bit. Pixels that are not cropped keep the topper depth.
     PS_OUTPUT OUT;
-    OUT.color = float4(1.0f, 0.0f, 0.0f, 1.0f);
-    OUT.depth = baseDepth;
+    OUT.color = debugCause ? GetCauseColor(equalDepths, isFloor, cropped) : float4(1.0f, 0.0f, 0.0f, 1.0f);
+    OUT.depth = cropped ? baseDepth : topperDepth;
     return OUT;
 }
 

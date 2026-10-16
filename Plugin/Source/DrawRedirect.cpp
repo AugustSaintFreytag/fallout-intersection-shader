@@ -1,11 +1,13 @@
 #include "DrawRedirect.hpp"
 
 #include "Dependencies.hpp"
+#include "StencilTags.hpp"
 
 #include "Gamebryo/NiD3DVertexShader.hpp"
 #include "Gamebryo/NiDX9Renderer.hpp"
 
 // Changes the indexed draws of replayed landscape passes on the device: the pixel shader, and for the overlay the mesh.
+// Outside the replays, it keeps draws without depth writes from changing the stencil tags (`StencilTags::KeepsTags`).
 //
 // The overlay shades every tagged pixel with the landscape block its ground point lies in, using that block's
 // textures and constants. The replayed pass of the block binds all of them. Its mesh and pixel shader do not fit.
@@ -72,8 +74,16 @@ namespace DrawRedirect {
 	// Draws according to the mode: unchanged, with the pixel shader of the current pass, or as the full-screen triangle
 	// in place of the first indexed draw of a pass. Full-screen mode skips the other draws of the pass.
 	static HRESULT STDMETHODCALLTYPE DrawIndexedPrimitiveHook(IDirect3DDevice9* apDevice, D3DPRIMITIVETYPE aeType, INT aiBaseVertexIndex, UINT auiMinVertexIndex, UINT auiNumVertices, UINT auiStartIndex, UINT auiPrimitiveCount) {
-		if (eMode == MODE_OFF)
-			return pOriginal(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
+		if (eMode == MODE_OFF) {
+			if (!StencilTags::KeepsTags())
+				return pOriginal(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
+
+			// Set on the device directly. The tagging window forces the write mask in the render state cache.
+			apDevice->SetRenderState(D3DRS_STENCILWRITEMASK, 0);
+			const HRESULT hResult = pOriginal(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
+			apDevice->SetRenderState(D3DRS_STENCILWRITEMASK, StencilTags::TAG_BITS);
+			return hResult;
+		}
 		// With the terrain pixel shader, the pass would paint plain terrain over the target.
 		if (!pPassShader)
 			return D3D_OK;
