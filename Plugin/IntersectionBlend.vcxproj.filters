@@ -177,7 +177,7 @@
     <ClCompile Include="Source\TerrainPasses.cpp">
       <Filter>Source</Filter>
     </ClCompile>
-    <ClCompile Include="Source\TopperCrop.cpp">
+    <ClCompile Include="Source\TopperBlend.cpp">
       <Filter>Source</Filter>
     </ClCompile>
     <ClCompile Include="Source\TopperPasses.cpp">
@@ -218,7 +218,7 @@
     <ClInclude Include="Source\TerrainPasses.hpp">
       <Filter>Source</Filter>
     </ClInclude>
-    <ClInclude Include="Source\TopperCrop.hpp">
+    <ClInclude Include="Source\TopperBlend.hpp">
       <Filter>Source</Filter>
     </ClInclude>
     <ClInclude Include="Source\TopperPasses.hpp">

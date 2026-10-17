@@ -9,6 +9,10 @@ namespace StencilTags {
 	static constexpr uint32_t TOPPER_BIT = 0x40;
 	static constexpr uint32_t TAG_BITS = TERRAIN_BLEND_BIT | TOPPER_BIT;
 
+	// Marks a topper pixel in front of a base with `TERRAIN_BLEND_BIT`, for the topper blend. Set between the topper
+	// replays, because the colour replay replaces the base's `TERRAIN_BLEND_BIT` with the topper's own.
+	static constexpr uint32_t TOPPER_BASE_BIT = 0x20;
+
 	void InstallHooks();
 
 	void LoadSelection();

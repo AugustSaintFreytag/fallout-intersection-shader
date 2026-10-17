@@ -10,7 +10,7 @@
 #include "Settings.hpp"
 #include "StencilTags.hpp"
 #include "TerrainPasses.hpp"
-#include "TopperCrop.hpp"
+#include "TopperBlend.hpp"
 #include "TopperPasses.hpp"
 
 #include "Bethesda/BSShaderAccumulator.hpp"
@@ -68,7 +68,7 @@ namespace OverlayPass {
 	void Initialize() {
 		const bool bShadersReady = GroundShaders::Load();
 		TopperPasses::Initialize();
-		TopperCrop::Initialize();
+		TopperBlend::Initialize();
 		GroundBuffer::Initialize();
 		DrawRedirect::Initialize();
 		if (bShadersReady && !DrawRedirect::IsReady())

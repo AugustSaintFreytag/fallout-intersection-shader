@@ -183,7 +183,7 @@ copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVS
     <ClCompile Include="Source\Settings.cpp" />
     <ClCompile Include="Source\StencilTags.cpp" />
     <ClCompile Include="Source\TerrainPasses.cpp" />
-    <ClCompile Include="Source\TopperCrop.cpp" />
+    <ClCompile Include="Source\TopperBlend.cpp" />
     <ClCompile Include="Source\TopperPasses.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -198,7 +198,7 @@ copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVS
     <ClInclude Include="Source\Settings.hpp" />
     <ClInclude Include="Source\StencilTags.hpp" />
     <ClInclude Include="Source\TerrainPasses.hpp" />
-    <ClInclude Include="Source\TopperCrop.hpp" />
+    <ClInclude Include="Source\TopperBlend.hpp" />
     <ClInclude Include="Source\TopperPasses.hpp" />
     <ClInclude Include="External\NVSE\nvse_version.h" />
     <ClInclude Include="External\NVSE\PluginAPI.h" />
