@@ -6,8 +6,12 @@
 #include "Gamebryo/NiD3DVertexShader.hpp"
 #include "Gamebryo/NiDX9Renderer.hpp"
 
+#include <unordered_map>
+#include <vector>
+
 // Changes the indexed draws of replayed landscape passes on the device: the pixel shader, and for the overlay the mesh.
 // Outside the replays, it keeps draws without depth writes from changing the stencil tags (`StencilTags::KeepsTags`).
+// In the feature replay of toppers, it draws each object mesh with the topper feature shader (`DrawWithFeatureShader`).
 //
 // The overlay shades every tagged pixel with the landscape block its ground point lies in, using that block's
 // textures and constants. The replayed pass of the block binds all of them. Its mesh and pixel shader do not fit.
@@ -36,21 +40,35 @@ namespace DrawRedirect {
 
 	// Covers the whole clip space square. Every pixel is drawn once.
 	static constexpr Vertex kTriangle[3] = {
-		{ -1.0f,  1.0f, 0.0f },
-		{  3.0f,  1.0f, 0.0f },
+		{ -1.0f, 1.0f, 0.0f },
+		{ 3.0f, 1.0f, 0.0f },
 		{ -1.0f, -3.0f, 0.0f },
 	};
 
-	static DrawIndexedPrimitiveFn		pOriginal		= nullptr;
-	static NiD3DVertexShader*			pVertexShader	= nullptr;
-	static IDirect3DVertexDeclaration9*	pDeclaration	= nullptr;
-	static Mode							eMode			= MODE_OFF;
-	static IDirect3DPixelShader9*		pPassShader		= nullptr;	// Pixel shader for the draws of the current pass
-	static bool							bPassDrawn		= false;	// The current pass has drawn its triangle.
-	static IDirect3DVertexBuffer9*		pPassStream		= nullptr;	// Stream 0 of that draw, compared only, no reference held
-	static uint32_t						uiCount			= 0;
-	static uint32_t						uiSkipped		= 0;
-	static uint32_t						uiForeign		= 0;
+	static DrawIndexedPrimitiveFn pOriginal = nullptr;
+	static NiD3DVertexShader* pVertexShader = nullptr;
+	static IDirect3DVertexDeclaration9* pDeclaration = nullptr;
+	static Mode eMode = MODE_OFF;
+	static IDirect3DPixelShader9* pPassShader = nullptr; // Pixel shader for the draws of the current pass
+	static bool bPassDrawn = false; // The current pass has drawn its triangle.
+	static IDirect3DVertexBuffer9* pPassStream = nullptr; // Stream 0 of that draw, compared only, no reference held
+	static uint32_t uiCount = 0;
+	static uint32_t uiSkipped = 0;
+	static uint32_t uiForeign = 0;
+
+	// Sampler Layout of Object Pixel Shaders
+	// The feature shader reads the base map at s0 and the height map at s3. Sampler stages keep the textures of earlier
+	// draws, so the device cannot tell whether a pass binds a height map. The pass's pixel shader declares it.
+	static constexpr uint32_t BASE_MAP_STAGE = 0;
+	static constexpr uint32_t HEIGHT_MAP_STAGE = 3;
+	static constexpr uint32_t FEATURE_CONSTANT_REGISTER = 0; // c0, `FeatureParams` of "Shaders/Toppers/TopperFeatures.hlsl"
+
+	struct SamplerLayout {
+		bool bBaseMap; // `BaseMap` at s0
+		bool bHeightMap; // `HeightMap` at s3
+	};
+
+	static std::unordered_map<const IDirect3DPixelShader9*, SamplerLayout> kSamplerLayouts;
 
 	template <typename T>
 	static void SafeRelease(T*& apObject) {
@@ -71,6 +89,58 @@ namespace DrawRedirect {
 		return hResult;
 	}
 
+	// Returns whether the constant table of the given pixel shader declares a sampler by name at the given stage.
+	static bool HasSampler(ID3DXConstantTable* apTable, const char* apName, uint32_t auiStage) {
+		const D3DXHANDLE hConstant = apTable->GetConstantByName(nullptr, apName);
+		return hConstant && apTable->GetSamplerIndex(hConstant) == auiStage;
+	}
+
+	// Returns where the given object pixel shader reads its base map and height map, from its constant table.
+	// The game's shaders keep their constant tables. A shader without one reads neither.
+	static SamplerLayout GetSamplerLayout(IDirect3DPixelShader9* apShader) {
+		const auto it = kSamplerLayouts.find(apShader);
+		if (it != kSamplerLayouts.end())
+			return it->second;
+
+		SamplerLayout kLayout = {};
+		UINT uiSize = 0;
+		if (apShader && SUCCEEDED(apShader->GetFunction(nullptr, &uiSize)) && uiSize) {
+			std::vector<uint8_t> kFunction(uiSize);
+			ID3DXConstantTable* pTable = nullptr;
+			if (SUCCEEDED(apShader->GetFunction(kFunction.data(), &uiSize))
+				&& SUCCEEDED(D3DXGetShaderConstantTable(reinterpret_cast<const DWORD*>(kFunction.data()), &pTable))) {
+				kLayout.bBaseMap = HasSampler(pTable, "BaseMap", BASE_MAP_STAGE);
+				kLayout.bHeightMap = HasSampler(pTable, "HeightMap", HEIGHT_MAP_STAGE);
+				pTable->Release();
+			}
+		}
+		kSamplerLayouts[apShader] = kLayout;
+		return kLayout;
+	}
+
+	// Draws the given mesh with the topper feature shader, telling it whether the pass binds a height map.
+	// Skips draws whose pixel shader reads no base map at s0. The features there stay neutral.
+	static HRESULT DrawWithFeatureShader(IDirect3DDevice9* apDevice, D3DPRIMITIVETYPE aeType, INT aiBaseVertexIndex, UINT auiMinVertexIndex, UINT auiNumVertices, UINT auiStartIndex, UINT auiPrimitiveCount) {
+		IDirect3DPixelShader9* pSavedPixelShader = nullptr;
+		apDevice->GetPixelShader(&pSavedPixelShader);
+		const SamplerLayout kLayout = GetSamplerLayout(pSavedPixelShader);
+		if (!kLayout.bBaseMap) {
+			SafeRelease(pSavedPixelShader);
+			return D3D_OK;
+		}
+
+		float fSavedConstant[4];
+		apDevice->GetPixelShaderConstantF(FEATURE_CONSTANT_REGISTER, fSavedConstant, 1);
+		const float fFeatureParams[4] = { kLayout.bHeightMap ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
+		apDevice->SetPixelShaderConstantF(FEATURE_CONSTANT_REGISTER, fFeatureParams, 1);
+		apDevice->SetPixelShader(pPassShader);
+		const HRESULT hResult = pOriginal(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
+		apDevice->SetPixelShader(pSavedPixelShader);
+		apDevice->SetPixelShaderConstantF(FEATURE_CONSTANT_REGISTER, fSavedConstant, 1);
+		SafeRelease(pSavedPixelShader);
+		return hResult;
+	}
+
 	// Draws according to the mode: unchanged, with the pixel shader of the current pass, or as the full-screen triangle
 	// in place of the first indexed draw of a pass. Full-screen mode skips the other draws of the pass.
 	static HRESULT STDMETHODCALLTYPE DrawIndexedPrimitiveHook(IDirect3DDevice9* apDevice, D3DPRIMITIVETYPE aeType, INT aiBaseVertexIndex, UINT auiMinVertexIndex, UINT auiNumVertices, UINT auiStartIndex, UINT auiPrimitiveCount) {
@@ -87,6 +157,8 @@ namespace DrawRedirect {
 		// With the terrain pixel shader, the pass would paint plain terrain over the target.
 		if (!pPassShader)
 			return D3D_OK;
+		if (eMode == MODE_TOPPER_FEATURES)
+			return DrawWithFeatureShader(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
 		if (eMode == MODE_SHADER)
 			return DrawWithPassShader(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
 

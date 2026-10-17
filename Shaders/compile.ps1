@@ -31,10 +31,10 @@ $jobs = [System.Collections.Generic.List[object]]::new()
 function Add-Shader([string]$ShaderProfile, [string]$Source, [string]$Output, [string[]]$Defines, [string[]]$Flags = @()) {
     $jobs.Add([pscustomobject]@{
         Profile = $ShaderProfile
-        Source  = Join-Path $shaders $Source
-        Output  = Join-Path $root $Output
+        Source = Join-Path $shaders $Source
+        Output = Join-Path $root $Output
         Defines = $Defines
-        Flags   = $Flags
+        Flags = $Flags
     })
 }
 
@@ -45,14 +45,15 @@ Add-Shader 'vs_3_0' 'Ground\GroundBuffer.hlsl' "$pluginOut\GroundBuffer.vso" @('
 Add-Shader 'ps_3_0' 'Ground\GroundBuffer.hlsl' "$pluginOut\GroundBuffer.pso" @('PS')
 Add-Shader 'vs_3_0' 'Ground\GroundQuad.hlsl' "$pluginOut\GroundQuad.vso" @()
 Add-Shader 'ps_3_0' 'Ground\GroundField.hlsl' "$pluginOut\GroundField.pso" @()
-Add-Shader 'ps_3_0' 'Toppers\TopperCrop.hlsl' "$pluginOut\TopperCopy.pso" @('COPY')
-Add-Shader 'ps_3_0' 'Toppers\TopperCrop.hlsl' "$pluginOut\TopperCrop.pso" @('CROP')
+Add-Shader 'ps_3_0' 'Toppers\TopperBlend.hlsl' "$pluginOut\TopperCopy.pso" @('COPY')
+Add-Shader 'ps_3_0' 'Toppers\TopperBlend.hlsl' "$pluginOut\TopperComposite.pso" @('COMPOSITE')
+Add-Shader 'ps_3_0' 'Toppers\TopperFeatures.hlsl' "$pluginOut\TopperFeatures.pso" @()
 
 # Ground mode pixel shaders: 7 texture counts x (no point lights, 6, 12, 24 point lights), one set per terrain shader mod.
 # File name T<texture count>L<point lights>.pso. The plugin picks the set that matches the installed terrain shaders.
 $groundVariants = @(
-    @{ Key = 'vpt';                Folder = 'VPT';               Source = 'Terrain\VPT\GroundTemplate.hlsl';      Defines = @() }
-    @{ Key = 'parallax';           Folder = 'Parallax';          Source = 'Terrain\Parallax\GroundTemplate.hlsl'; Defines = @() }
+    @{ Key = 'vpt'; Folder = 'VPT'; Source = 'Terrain\VPT\GroundTemplate.hlsl'; Defines = @() }
+    @{ Key = 'parallax'; Folder = 'Parallax'; Source = 'Terrain\Parallax\GroundTemplate.hlsl'; Defines = @() }
     @{ Key = 'parallax-optimized'; Folder = 'ParallaxOptimized'; Source = 'Terrain\Parallax\GroundTemplate.hlsl'; Defines = @('MAX_STEPS=8', 'MAX_DISTANCE=1024') }
 )
 $pointLights = @(0, 6, 12, 24)

@@ -2,6 +2,7 @@
 #include "nvse/PluginAPI.h"
 
 #include "Dependencies.hpp"
+#include "Hotkeys.hpp"
 #include "OverlayPass.hpp"
 #include "RenderStates.hpp"
 #include "Settings.hpp"
@@ -13,11 +14,11 @@ BS_ALLOCATORS
 
 IDebugLog gLog("logs\\IntersectionBlend.log");
 
-static constexpr const char*	PLUGIN_NAME		= "Intersection Blend";
-static constexpr uint32_t		PLUGIN_VERSION	= 1;
+static constexpr const char* PLUGIN_NAME = "Intersection Blend";
+static constexpr uint32_t PLUGIN_VERSION = 1;
 
-static NVSEMessagingInterface*	pMsgInterface	= nullptr;
-static PluginHandle				uiPluginHandle	= 0;
+static NVSEMessagingInterface* pMsgInterface = nullptr;
+static PluginHandle uiPluginHandle = 0;
 
 static void MessageHandler(NVSEMessagingInterface::Message* apMessage) {
 	switch (apMessage->type) {
@@ -30,6 +31,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* apMessage) {
 		case NVSEMessagingInterface::kMessage_MainGameLoop:
 			// Runs before the frame is rendered. Drops passes of a frame that got no depth callback.
 			OverlayPass::OnMainLoop();
+			Hotkeys::Poll();
 			TerrainPasses::Clear();
 			TopperPasses::Clear();
 			break;
@@ -37,9 +39,9 @@ static void MessageHandler(NVSEMessagingInterface::Message* apMessage) {
 }
 
 EXTERN_DLL_EXPORT bool NVSEPlugin_Query(const NVSEInterface* nvse, PluginInfo* info) {
-	info->infoVersion	= PluginInfo::kInfoVersion;
-	info->name			= PLUGIN_NAME;
-	info->version		= PLUGIN_VERSION;
+	info->infoVersion = PluginInfo::kInfoVersion;
+	info->name = PLUGIN_NAME;
+	info->version = PLUGIN_VERSION;
 
 	return !nvse->isEditor;
 }

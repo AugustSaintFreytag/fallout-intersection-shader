@@ -1,4 +1,4 @@
-// Blend math for the terrain overlay pass.
+// Blend math for the terrain overlay and the topper blend.
 
 // Height within which the visible surface touches the terrain and blends fully, in game units.
 static const float SelfHeight = 0.5f;
@@ -6,21 +6,30 @@ static const float SelfHeight = 0.5f;
 // Lower limit for the sine of the surface tilt against the terrain. Keeps the distance to the contact line finite.
 static const float MinTiltSine = 1e-3f;
 
-// Returns the opacity of the terrain overlay over a visible surface.
+// Lower limit for the blend range beyond `SelfHeight`. Keeps the fade edges of `smoothstep` apart.
+static const float MinBlendRange = 1e-3f;
+
+// Returns the fade of the terrain overlay towards the maximum distance, 1 near the camera and 0 at the maximum distance.
+float GetDistanceFade(float sceneDepth, float maxDistance) {
+    return 1.0f - smoothstep(maxDistance * 0.8f, maxDistance, sceneDepth);
+}
+
+// Returns the blend amount of the terrain overlay over a visible surface, 1 at the contact line and 0 at the end of the
+// blend range. Without the hard edge, the amount is the opacity of the overlay.
 //
 // The height is the height of the visible surface above the terrain right under it, along the terrain normal.
 // Both normals are normalized and in the same space. The surface normal can have either sign.
 //
 // The blend range is a distance along the surface, up from the contact line. For a surface tilted against the terrain
-// by an angle, that distance is the height over the sine of the angle. Vertical faces fade over the blend range in
-// height. Shallow faces get a band of the same width along the surface. Flat statics resting on the ground, such as
+// by an angle, that distance is the height over the sine of the angle. Flat statics resting on the ground, such as
 // slabs, lie their thickness above it and nearly parallel. Their distance to a contact line is far beyond the range.
-float IntersectionBlendFactor(float height, float sceneDepth, float3 groundNormal, float3 surfaceNormal, float blendRange, float maxDistance) {
-    float distanceFade = 1.0f - smoothstep(maxDistance * 0.8f, maxDistance, sceneDepth);
-
+//
+// The climb height caps the height above the terrain that blends. Steep faces, such as poles and curbs, blend up to
+// the smaller of the two. Near-flat faces keep the full blend range along the surface.
+float IntersectionBlendFactor(float height, float3 groundNormal, float3 surfaceNormal, float blendRange, float climbHeight) {
     // Contact line. The overlay only draws on samples of tagged statics. This is never terrain over terrain.
     if (abs(height) < SelfHeight)
-        return distanceFade;
+        return 1.0f;
 
     if (height < 0.0f)
         return 0.0f; // The visible surface lies below the terrain there.
@@ -28,7 +37,37 @@ float IntersectionBlendFactor(float height, float sceneDepth, float3 groundNorma
     float tiltCosine = dot(surfaceNormal, groundNormal);
     float tiltSine = sqrt(saturate(1.0f - tiltCosine * tiltCosine));
     float contactDistance = height / max(tiltSine, MinTiltSine);
-    return (1.0f - smoothstep(SelfHeight, blendRange, contactDistance)) * distanceFade;
+    float surfaceFade = 1.0f - smoothstep(SelfHeight, max(blendRange, SelfHeight + MinBlendRange), contactDistance);
+    float climbFade = 1.0f - smoothstep(SelfHeight, max(climbHeight, SelfHeight + MinBlendRange), height);
+    return min(surfaceFade, climbFade);
+}
+
+// Edge
+
+static const float MinEdgeWidth = 0.001f;
+static const float MinShadowWidth = 0.01f;
+
+// Returns the coverage of the lower material over a surface (x) and the contact shadow on the surface (y), from a
+// blend amount: 1 at the contact line, 0 at the end of the blend range.
+//
+// The coverage fades over the given width, in blend amount, around half the amount. The contact shadow darkens the
+// surface where the material meets it. It is at full intensity at the edge and under the coverage, and fades out over
+// the shadow width below half the amount. The terrain overlay and the topper blend share it, so both look alike.
+float2 GetEdgeCoverage(float amount, float width, float shadowIntensity, float shadowWidth) {
+    float coverage = saturate((amount - 0.5f) / max(width, MinEdgeWidth) + 0.5f);
+    float shadowDistance = saturate((0.5f - amount) / max(shadowWidth, MinShadowWidth));
+    float shadow = shadowIntensity * (1.0f - smoothstep(0.0f, 1.0f, shadowDistance));
+    return float2(coverage, shadow);
+}
+
+// Returns the output of a pass that blends with source alpha: the lower material's colour by its coverage over the
+// surface, darkened by the contact shadow.
+//
+// The result is colour × coverage + surface × (1 − shadow) × (1 − coverage). The alpha is
+// 1 − (1 − shadow) × (1 − coverage), and the colour is colour × coverage over that alpha.
+float4 ComposeEdge(float3 color, float2 coverageShadow) {
+    float alpha = 1.0f - (1.0f - coverageShadow.y) * (1.0f - coverageShadow.x);
+    return float4(alpha > 0.0f ? color * coverageShadow.x / alpha : 0.0f, alpha);
 }
 
 // Size of a landscape block, a quarter of a cell. Blocks lie on a world-aligned grid.

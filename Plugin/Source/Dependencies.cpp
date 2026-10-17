@@ -2,18 +2,18 @@
 
 namespace Dependencies {
 
-	static constexpr const char*	PLUGIN_TITLE			= "Intersection Blend";
-	static constexpr uint32_t		uiShaderLoaderVersion	= 131;
+	static constexpr const char* PLUGIN_TITLE = "Intersection Blend";
+	static constexpr uint32_t uiShaderLoaderVersion = 131;
 
 	typedef void(__cdecl* RegisterPostResolveDepthCallbackFn)(PostResolveDepthCallback);
 	typedef void(__cdecl* ResolveSceneDepthFn)(BSShaderAccumulator*, BSRenderedTexture*);
 	typedef NiD3DVertexShader*(__cdecl* CreateVertexShaderFn)(const char*);
 	typedef NiD3DPixelShader*(__cdecl* CreatePixelShaderFn)(const char*);
 
-	static RegisterPostResolveDepthCallbackFn	pRegisterPostResolveDepthCallback	= nullptr;
-	static ResolveSceneDepthFn					pResolveSceneDepth					= nullptr;
-	static CreateVertexShaderFn					pCreateVertexShader					= nullptr;
-	static CreatePixelShaderFn					pCreatePixelShader					= nullptr;
+	static RegisterPostResolveDepthCallbackFn pRegisterPostResolveDepthCallback = nullptr;
+	static ResolveSceneDepthFn pResolveSceneDepth = nullptr;
+	static CreateVertexShaderFn pCreateVertexShader = nullptr;
+	static CreatePixelShaderFn pCreatePixelShader = nullptr;
 
 	static bool Fail(const char* apMessage) {
 		_MESSAGE("Missing dependency: %s", apMessage);
@@ -24,11 +24,11 @@ namespace Dependencies {
 	// Checks that every hard dependency is loaded and resolves their exports.
 	// Shows a message box and returns false if one is missing or outdated.
 	bool Check(const NVSEInterface* apNVSE) {
-		HMODULE hShaderLoader	= GetModuleHandle("Fallout Shader Loader.dll");
-		HMODULE hLODFlickerFix	= GetModuleHandle("LODFlickerFix.dll");
-		HMODULE hDepthResolve	= GetModuleHandle("DepthResolve.dll");
-		HMODULE hVPT			= GetModuleHandle("VanillaPlusTerrain.dll");
-		HMODULE hJohnnyGuitar	= GetModuleHandle("johnnyguitar.dll");
+		HMODULE hShaderLoader = GetModuleHandle("Fallout Shader Loader.dll");
+		HMODULE hLODFlickerFix = GetModuleHandle("LODFlickerFix.dll");
+		HMODULE hDepthResolve = GetModuleHandle("DepthResolve.dll");
+		HMODULE hVPT = GetModuleHandle("VanillaPlusTerrain.dll");
+		HMODULE hJohnnyGuitar = GetModuleHandle("johnnyguitar.dll");
 
 		if (!hShaderLoader)
 			return Fail("Fallout Shader Loader not found.\nIntersection Blend cannot be used without it and is disabled.");
@@ -42,7 +42,7 @@ namespace Dependencies {
 		}
 
 		pCreateVertexShader = reinterpret_cast<CreateVertexShaderFn>(GetProcAddress(hShaderLoader, "CreateVertexShader"));
-		pCreatePixelShader	= reinterpret_cast<CreatePixelShaderFn>(GetProcAddress(hShaderLoader, "CreatePixelShader"));
+		pCreatePixelShader = reinterpret_cast<CreatePixelShaderFn>(GetProcAddress(hShaderLoader, "CreatePixelShader"));
 		if (!pCreateVertexShader || !pCreatePixelShader)
 			return Fail("Fallout Shader Loader does not export its shader creation functions.\nIntersection Blend is disabled.");
 

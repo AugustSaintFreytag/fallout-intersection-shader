@@ -18,23 +18,23 @@
 namespace TerrainPasses {
 
 	// Call of the per-pass draw function in the pass group loop of `BSBatchRenderer` (GAME - 0xB9A120).
-	static constexpr uint32_t RENDER_PASS_CALL		= 0xB9A2A1;
+	static constexpr uint32_t RENDER_PASS_CALL = 0xB9A2A1;
 
 	// Per-pass draw function (GAME - 0xB994F0), cdecl `void (RenderPass*, pass type, 3 more values)`.
 	typedef void(__cdecl* RenderPassFn)(void*, uint32_t, uint32_t, uint32_t, uint32_t);
 
 	// A landscape pass draw recorded for the replay.
 	struct RecordedPass {
-		void*						pRenderPass;
-		uint32_t					uiPassType;
-		uint32_t					uiArg2;
-		uint32_t					uiArg3;
-		uint32_t					uiArg4;
-		const BSRenderedTexture*	pTarget;
+		void* pRenderPass;
+		uint32_t uiPassType;
+		uint32_t uiArg2;
+		uint32_t uiArg3;
+		uint32_t uiArg4;
+		const BSRenderedTexture* pTarget;
 	};
 
-	static CallDetour					kRenderPassDetour;
-	static std::vector<RecordedPass>	kRecordedPasses;
+	static CallDetour kRenderPassDetour;
+	static std::vector<RecordedPass> kRecordedPasses;
 
 	// Records landscape passes, defers topper passes and wraps every other pass draw with stencil tagging.
 	static void __cdecl RenderPassHook(void* apRenderPass, uint32_t auiPassType, uint32_t auiArg2, uint32_t auiArg3, uint32_t auiArg4) {
@@ -103,7 +103,7 @@ namespace TerrainPasses {
 			const NiGeometry* pGeometry = GetGeometry(rPass);
 			const NiNode* pParent = pGeometry ? pGeometry->m_pkParent : nullptr;
 			const NiBound* pBound = pGeometry ? pGeometry->m_pWorldBound : nullptr;
-			_MESSAGE("  pass %u, geometry %p \"%s\", parent \"%s\", bound centre %.0f, %.0f, %.0f, radius %.0f", rPass.uiPassType, pGeometry,
+			_MESSAGE("  pass %u, geometry %p '%s', parent '%s', bound centre %.0f, %.0f, %.0f, radius %.0f", rPass.uiPassType, pGeometry,
 				pGeometry && pGeometry->GetName() ? pGeometry->GetName() : "", pParent && pParent->GetName() ? pParent->GetName() : "",
 				pBound ? pBound->m_kCenter.x : 0.0f, pBound ? pBound->m_kCenter.y : 0.0f, pBound ? pBound->m_kCenter.z : 0.0f, pBound ? pBound->m_fRadius : 0.0f);
 		}

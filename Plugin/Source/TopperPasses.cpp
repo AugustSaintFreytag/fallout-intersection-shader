@@ -1,11 +1,12 @@
 #include "TopperPasses.hpp"
 
 #include "Dependencies.hpp"
+#include "DrawRedirect.hpp"
 #include "RenderStates.hpp"
 #include "StencilTags.hpp"
 #include "Settings.hpp"
 #include "TerrainPasses.hpp"
-#include "TopperCrop.hpp"
+#include "TopperBlend.hpp"
 
 #include "Bethesda/BSShaderAccumulator.hpp"
 #include "Bethesda/BSShaderManager.hpp"
@@ -22,10 +23,12 @@
 // toppers first and has Depth Resolve copy the depth again. The ground pass, AO and everything after them see the toppers.
 //
 // The passes are drawn twice. The first replay writes depth and `TOPPER_BIT` only, with colour writes off.
-// `TERRAIN_BLEND_BIT` of the base under each topper pixel stays. `TopperCrop` then crops the toppers where they rest
-// on a floor. The second replay draws colour where `TOPPER_BIT` is still set and writes the topper's own
-// `TERRAIN_BLEND_BIT`. It draws the same geometry with the same shaders, so its depth equals the depth of the first
-// replay and passes the depth test of each pass.
+// `TERRAIN_BLEND_BIT` of the base under each topper pixel stays. Depth Resolve then copies the depth with the
+// toppers, and `TopperBlend` marks the toppers in front of a base. The second replay draws colour where `TOPPER_BIT`
+// is set and writes the topper's own `TERRAIN_BLEND_BIT`. It draws the same geometry with the same shaders, so its
+// depth equals the depth of the first replay and passes the depth test of each pass. The depth copy stays valid.
+// A third replay draws the texture features of the marked toppers with the topper feature shader. `TopperBlend` then
+// fades the foot of each topper into the floor.
 //
 // A pass inherits render states from the passes before it and from its pass group. `BSBatchRenderer` locks alpha test
 // and alpha to coverage for each pass group (GAME - 0xB9A120). The recorder keeps the states a pass starts with.
@@ -49,27 +52,32 @@ namespace TopperPasses {
 
 	static constexpr uint32_t TEXTURE_STAGE_COUNT = 16;
 
+	// Index of `D3DRS_ZWRITEENABLE` in `kInheritedStates`. Passes without depth writes, such as further light passes,
+	// add nothing to the texture features.
+	static constexpr uint32_t Z_WRITE_INDEX = 1;
+	static_assert(kInheritedStates[Z_WRITE_INDEX] == D3DRS_ZWRITEENABLE);
+
 	// Ends the technique of the current shader and pass type, and clears both (GAME - 0xB988E0). cdecl, no arguments.
 	// The per-pass draw function starts a technique when the shader or pass type changes (GAME - 0xB99390).
 	static constexpr uint32_t END_TECHNIQUE = 0xB988E0;
 
 	// A topper pass draw recorded for the replay, with the render states it started with.
 	struct RecordedPass {
-		void*						pRenderPass;
-		uint32_t					uiPassType;
-		uint32_t					uiArg2;
-		uint32_t					uiArg3;
-		uint32_t					uiArg4;
-		const BSRenderedTexture*	pTarget;
-		uint32_t					uiTags;
-		uint32_t					uiZFunc;
-		uint32_t					uiInherited[ARRAYSIZE(kInheritedStates)];
-		uint32_t					uiLocked[ARRAYSIZE(kLockedStates)];
+		void* pRenderPass;
+		uint32_t uiPassType;
+		uint32_t uiArg2;
+		uint32_t uiArg3;
+		uint32_t uiArg4;
+		const BSRenderedTexture* pTarget;
+		uint32_t uiTags;
+		uint32_t uiZFunc;
+		uint32_t uiInherited[ARRAYSIZE(kInheritedStates)];
+		uint32_t uiLocked[ARRAYSIZE(kLockedStates)];
 	};
 
-	static bool							bEnabled	= false;
-	static std::vector<RecordedPass>	kRecordedPasses;
-	static double						dResolveMilliseconds	= 0.0;	// CPU time in `ResolveSceneDepth` since the last `ConsumeResolveMilliseconds`
+	static bool bEnabled = false;
+	static std::vector<RecordedPass> kRecordedPasses;
+	static double dResolveMilliseconds = 0.0; // CPU time in `ResolveSceneDepth` since the last `ConsumeResolveMilliseconds`
 
 	// Resolves the scene depth through Depth Resolve and adds the CPU time of the call to the profile.
 	static void ResolveSceneDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget) {
@@ -116,9 +124,9 @@ namespace TopperPasses {
 		return true;
 	}
 
-	// Draws the topper passes deferred from the opaque stage of the given target, cropped on floors, then resolves the
-	// scene depth again. The given texture holds the scene depth from Depth Resolve's first resolve.
-	// Returns the number of passes per replay.
+	// Draws the topper passes deferred from the opaque stage of the given target, resolves the scene depth again and
+	// fades the toppers into the floors they rest on. The given texture holds the scene depth from Depth Resolve's first
+	// resolve. Returns the number of passes per replay.
 	uint32_t Replay(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture) {
 		const auto itFirst = std::find_if(kRecordedPasses.begin(), kRecordedPasses.end(), [apTarget](const RecordedPass& arPass) { return arPass.pTarget == apTarget; });
 		if (itFirst == kRecordedPasses.end())
@@ -126,7 +134,7 @@ namespace TopperPasses {
 
 		NiDX9RenderState* pRenderState = NiDX9Renderer::GetSingleton()->m_pkRenderState;
 		IDirect3DDevice9* pDevice = NiDX9Renderer::GetSingleton()->GetD3DDevice();
-		const bool bCrop = TopperCrop::CopyBaseDepth(pDevice, apDepthTexture);
+		const bool bBlend = TopperBlend::CopyBase(pDevice, apDepthTexture);
 		RenderStates::SyncTextureStages(pRenderState, pDevice, TEXTURE_STAGE_COUNT);
 
 		// The state the opaque stage left, restored after the replay.
@@ -151,17 +159,19 @@ namespace TopperPasses {
 			for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++)
 				kStates.Force(kLockedStates[i], itFirst->uiLocked[i]);
 
-			const auto DrawPasses = [&]() {
+			// The feature replay only draws passes with depth writes, and keeps the stencil reference of the caller.
+			const auto DrawPasses = [&](bool abFeatures) {
 				uint32_t uiDrawn = 0;
 				for (auto it = itFirst; it != kRecordedPasses.end(); ++it) {
-					if (it->pTarget != apTarget)
+					if (it->pTarget != apTarget || (abFeatures && !it->uiInherited[Z_WRITE_INDEX]))
 						continue;
 
 					for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++)
 						pRenderState->SetRenderState(kInheritedStates[i], it->uiInherited[i], 0, false);
 					for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++)
 						kStates.Update(kLockedStates[i], it->uiLocked[i]);
-					kStates.Update(D3DRS_STENCILREF, it->uiTags);
+					if (!abFeatures)
+						kStates.Update(D3DRS_STENCILREF, it->uiTags);
 					SetZFunc(pRenderState, pDevice, it->uiZFunc);
 
 					TerrainPasses::DrawPass(it->pRenderPass, it->uiPassType, it->uiArg2, it->uiArg3, it->uiArg4);
@@ -174,22 +184,41 @@ namespace TopperPasses {
 			{
 				ForcedRenderStates kDepthOnly(pRenderState);
 				kDepthOnly.Force(D3DRS_COLORWRITEENABLE, 0);
-				uiCount = DrawPasses();
+				uiCount = DrawPasses(false);
 			}
 
-			// The crop needs the depth with the toppers. The RESZ resolve of Depth Resolve draws a point, which must
-			// not write stencil. It also binds the depth texture to stage 0 behind the cache.
-			if (bCrop) {
-				kStates.Update(D3DRS_STENCILWRITEMASK, 0);
-				ResolveSceneDepth(apAccumulator, apTarget);
-				TopperCrop::Crop(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
-				RenderStates::SyncTextureStages(pRenderState, pDevice, TEXTURE_STAGE_COUNT);
-			}
+			// The depth with the toppers, for the topper blend and everything after the replay. The RESZ resolve of
+			// Depth Resolve draws a point, which must not write stencil. It also binds the depth texture to stage 0
+			// behind the cache.
+			kStates.Update(D3DRS_STENCILWRITEMASK, 0);
+			ResolveSceneDepth(apAccumulator, apTarget);
+			if (bBlend)
+				TopperBlend::MarkBases(pDevice);
+			RenderStates::SyncTextureStages(pRenderState, pDevice, TEXTURE_STAGE_COUNT);
 
 			// Colour where `TOPPER_BIT` is set, and the topper's own `TERRAIN_BLEND_BIT`.
 			kStates.Update(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
 			kStates.Update(D3DRS_STENCILWRITEMASK, StencilTags::TERRAIN_BLEND_BIT);
-			DrawPasses();
+			DrawPasses(false);
+
+			// Texture features where the composite blends: toppers in front of a tagged base. The depth test passes as
+			// in the colour replay. Colour writes go to the feature target only.
+			IDirect3DPixelShader9* pFeatureShader = bBlend ? TopperBlend::BeginFeatures(pDevice) : nullptr;
+			if (pFeatureShader) {
+				ForcedRenderStates kFeatureStates(pRenderState);
+				kFeatureStates.Force(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE | D3DCOLORWRITEENABLE_ALPHA);
+				kFeatureStates.Force(D3DRS_ALPHABLENDENABLE, FALSE);
+				kFeatureStates.Force(D3DRS_ZWRITEENABLE, FALSE);
+				kStates.Update(D3DRS_STENCILMASK, StencilTags::TOPPER_BIT | StencilTags::TOPPER_BASE_BIT);
+				kStates.Update(D3DRS_STENCILREF, StencilTags::TOPPER_BIT | StencilTags::TOPPER_BASE_BIT);
+				kStates.Update(D3DRS_STENCILWRITEMASK, 0);
+
+				DrawRedirect::SetMode(DrawRedirect::MODE_TOPPER_FEATURES);
+				DrawRedirect::BeginPass(pFeatureShader);
+				DrawPasses(true);
+				DrawRedirect::SetMode(DrawRedirect::MODE_OFF);
+				TopperBlend::EndFeatures(pDevice);
+			}
 		}
 
 		// After the group locks are released, as in `RenderBatches`. The technique restores the states it changed.
@@ -198,8 +227,8 @@ namespace TopperPasses {
 			pRenderState->SetRenderState(kInheritedStates[i], uiSavedInherited[i], 0, false);
 		SetZFunc(pRenderState, pDevice, uiSavedZFunc);
 
-		// After the forced states are restored. The resolve sets states of its own.
-		ResolveSceneDepth(apAccumulator, apTarget);
+		if (bBlend)
+			TopperBlend::Composite(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
 		return uiCount;
 	}
 

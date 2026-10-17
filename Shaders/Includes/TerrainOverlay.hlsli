@@ -10,12 +10,14 @@
 #include "IntersectionBlend.hlsli"
 #include "Packing.hlsli"
 
-float4 IBOverlayParams : register(c89); // x = debug mode
+float4 IBOverlayParams : register(c89); // x = debug mode, y = edge softness, z = edge feature strength,
+                                        // w = contact shadow intensity
 float4 IBEyePosition : register(c90);   // xyz = camera position in world space
 float4 IBScreenParams : register(c91);  // x = 1 / width, y = 1 / height
 float4 IBBlock : register(c92);         // xy = grid index of the landscape block being drawn
 float4 IBModelEye : register(c93);      // xyz = camera position in the block's model space
 float4 IBFogRows[3] : register(c94);    // Eye-relative world position to the fog position (clip x, y, w - z)
+float4 IBEdgeParams : register(c97);    // x = edge feature size, y = blend range, z = contact shadow width
 
 // Written by the ground buffer pass: ground points (s14) and their packed attributes (s15).
 //
@@ -26,6 +28,11 @@ sampler2D IBGroundAttributes : register(s15);
 // Returns whether debug mode 2 (overlay mask) or higher is active.
 bool IsOverlayMaskDebug() {
     return IBOverlayParams.x > 1.5f;
+}
+
+// Returns whether debug mode 11 (edge features) is active.
+bool IsEdgeFeatureDebug() {
+    return abs(IBOverlayParams.x - 11.0f) < 0.5f;
 }
 
 // Turns a tangent frame onto the given ground normal, keeping its handedness.
@@ -46,7 +53,8 @@ float3 GetBlockColor(float2 block) {
 //
 // Nothing comes from the mesh. Lighting happens in the model space of the block, like for the block's own pixels.
 struct GroundSample {
-    float alpha;
+    float amount;           // Blend amount, 1 at the contact line and 0 at the end of the blend range
+    float distanceFade;
     float3 position;        // Ground point, model space
     float2 uv;
     float2 uvDx;            // Texture coordinate change to the neighbouring pixels, for mip selection
@@ -75,14 +83,15 @@ bool GetGroundSample(float2 vpos, out GroundSample result) {
     float3 colorAlpha = UnpackUnorm3x8(attributes.w);
     float3 groundPoint = points.xyz;
     float2 block = floor((IBEyePosition.xy + groundPoint.xy) / LandscapeBlockSize);
-    [branch] if (colorAlpha.y <= 1.0f / 255.0f || any(block != IBBlock.xy))
+    [branch] if (colorAlpha.y <= 1.0f / 255.0f || colorAlpha.z <= 1.0f / 255.0f || any(block != IBBlock.xy))
         return false;
 
     float3 blend012 = UnpackUnorm3x8(attributes.x);
     float3 blend345 = UnpackUnorm3x8(attributes.y);
     float3 blend6Color = UnpackUnorm3x8(attributes.z);
 
-    result.alpha = colorAlpha.y;
+    result.amount = colorAlpha.y;
+    result.distanceFade = colorAlpha.z;
 
     float2 normal = UnpackUnorm2x12(points.w) * 2.0f - 1.0f;
     result.groundNormal = float3(normal, sqrt(saturate(1.0f - dot(normal, normal))));
@@ -115,4 +124,51 @@ void GetGroundBasis(float3 groundNormal, out float3 tangent, out float3 binormal
     binormal = float3(0.0f, 1.0f, 0.0f);
     normal = float3(0.0f, 0.0f, 1.0f);
     RebaseOnGround(tangent, binormal, normal, groundNormal);
+}
+
+// Edge Shape
+
+// Gain on the texture features. Pebbles rise about 0.05-0.1 above the blurred height in common ground textures.
+static const float FeatureGain = 8.0f;
+
+// Width of the antialiased edge, in blend amount per pixel footprint over the blend range.
+// The blend amount falls by up to 1.5 per blend range, at the middle of its `smoothstep`.
+static const float EdgeAntialiasSlope = 1.5f;
+
+// Returns the texture features at a texture coordinate, in [-1, 1]: positive on pebbles and other raised features,
+// negative in the gaps between them.
+//
+// The features are the height in the diffuse alpha minus the same height blurred to the edge feature size, weighted
+// by the shading weights. Textures without a height add nothing (height status 0). The blurred height comes from a
+// coarser mip, picked by gradients of the feature size. Where the pixel footprint is larger than the feature size,
+// both heights come from the same mip and the features fade out.
+float GetEdgeFeatures(float2 uv, float2 dx, float2 dy, int texCount, sampler2D tex[7], float weights[7], float status[7]) {
+    float featureUV = IBEdgeParams.x / TerrainUVScale;
+    float2 blurDx = dx * max(1.0f, featureUV / max(length(dx), 1e-6f));
+    float2 blurDy = dy * max(1.0f, featureUV / max(length(dy), 1e-6f));
+
+    float features = 0.0f;
+    [unroll] for (int i = 0; i < texCount; i++) {
+        if (status[i] > 0.0f)
+            features += (tex2Dgrad(tex[i], uv, dx, dy).a - tex2Dgrad(tex[i], uv, blurDx, blurDy).a) * weights[i];
+    }
+    return clamp(features * FeatureGain, -1.0f, 1.0f);
+}
+
+// Returns the output of an overlay pixel from its shaded terrain colour: the terrain over the static, and the contact
+// shadow on the static past the edge (`GetEdgeCoverage`, `ComposeEdge`).
+//
+// The texture features shift the blend amount: pebbles stay longer, the gaps between them go first. The shift is
+// strongest halfway through the blend range and vanishes at both ends. The contact line stays covered, and nothing
+// shows past the end of the range. Towards an edge softness of 0 the edge gets hard, antialiased over about a pixel.
+// Screen-space AO only sees the geometric contact line at the bottom of the band. The contact shadow stands in for the
+// crease at the top. It follows the features, so pebbles cast their own.
+float4 GetOverlayOutput(GroundSample ground, float features, float3 color) {
+    float amount = ground.amount;
+    float shaped = amount + 4.0f * amount * (1.0f - amount) * IBOverlayParams.z * features;
+
+    float footprint = max(length(ground.uvDx), length(ground.uvDy)) * TerrainUVScale;
+    float width = max(IBOverlayParams.y, footprint * EdgeAntialiasSlope / IBEdgeParams.y);
+    float4 output = ComposeEdge(color, GetEdgeCoverage(shaped, width, IBOverlayParams.w, IBEdgeParams.z));
+    return float4(output.rgb, output.a * ground.distanceFade);
 }

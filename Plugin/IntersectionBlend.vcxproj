@@ -88,12 +88,12 @@
       <AdditionalDependencies>d3d9.lib;dxguid.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Message>Installing DLL...</Message>
+      <Message>Copying build output to Build\Plugin...</Message>
       <Command>if not exist "$(ProjectDir)..\Build\Plugin\NVSE\Plugins" mkdir "$(ProjectDir)..\Build\Plugin\NVSE\Plugins"
-copy "$(TargetPath)" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetFileName)"
-copy "$(TargetDir)$(TargetName).pdb" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetName).pdb"
-copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlend.ini"
-copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlendForms.ini"</Command>
+copy "$(TargetPath)" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetFileName)" >nul
+copy "$(TargetDir)$(TargetName).pdb" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetName).pdb" >nul
+copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlend.ini" >nul
+copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlendForms.ini" >nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
@@ -132,12 +132,12 @@ copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVS
       <AdditionalDependencies>d3d9.lib;dxguid.lib;%(AdditionalDependencies)</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Message>Installing DLL...</Message>
+      <Message>Copying build output to Build\Plugin...</Message>
       <Command>if not exist "$(ProjectDir)..\Build\Plugin\NVSE\Plugins" mkdir "$(ProjectDir)..\Build\Plugin\NVSE\Plugins"
-copy "$(TargetPath)" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetFileName)"
-copy "$(TargetDir)$(TargetName).pdb" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetName).pdb"
-copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlend.ini"
-copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlendForms.ini"</Command>
+copy "$(TargetPath)" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetFileName)" >nul
+copy "$(TargetDir)$(TargetName).pdb" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\$(TargetName).pdb" >nul
+copy "$(ProjectDir)IntersectionBlend.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlend.ini" >nul
+copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVSE\Plugins\IntersectionBlendForms.ini" >nul</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -172,6 +172,7 @@ copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVS
     <ClCompile Include="External\Game\Gamebryo\NiTexture.cpp" />
     <ClCompile Include="External\Misc\BSD3DTexture.cpp" />
     <ClCompile Include="Source\main.cpp" />
+    <ClCompile Include="Source\Hotkeys.cpp" />
     <ClCompile Include="Source\Dependencies.cpp" />
     <ClCompile Include="Source\DrawRedirect.cpp" />
     <ClCompile Include="Source\GroundBuffer.cpp" />
@@ -182,10 +183,11 @@ copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVS
     <ClCompile Include="Source\Settings.cpp" />
     <ClCompile Include="Source\StencilTags.cpp" />
     <ClCompile Include="Source\TerrainPasses.cpp" />
-    <ClCompile Include="Source\TopperCrop.cpp" />
+    <ClCompile Include="Source\TopperBlend.cpp" />
     <ClCompile Include="Source\TopperPasses.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Source\Hotkeys.hpp" />
     <ClInclude Include="Source\Dependencies.hpp" />
     <ClInclude Include="Source\DrawRedirect.hpp" />
     <ClInclude Include="Source\GroundBuffer.hpp" />
@@ -196,7 +198,7 @@ copy "$(ProjectDir)IntersectionBlendForms.ini" "$(ProjectDir)..\Build\Plugin\NVS
     <ClInclude Include="Source\Settings.hpp" />
     <ClInclude Include="Source\StencilTags.hpp" />
     <ClInclude Include="Source\TerrainPasses.hpp" />
-    <ClInclude Include="Source\TopperCrop.hpp" />
+    <ClInclude Include="Source\TopperBlend.hpp" />
     <ClInclude Include="Source\TopperPasses.hpp" />
     <ClInclude Include="External\NVSE\nvse_version.h" />
     <ClInclude Include="External\NVSE\PluginAPI.h" />

@@ -4,10 +4,10 @@ namespace Profiler {
 
 	// Stages of the post-resolve callback, in the order they run.
 	enum Stage : uint32_t {
-		STAGE_TOPPERS	= 0,	// Topper replay and depth resolve
-		STAGE_FIELD		= 1,	// Height field and attribute field update
-		STAGE_GROUND	= 2,	// Ground pass
-		STAGE_OVERLAY	= 3,	// Overlay replay
+		STAGE_TOPPERS = 0, // Topper replay and depth resolve
+		STAGE_FIELD = 1, // Height field and attribute field update
+		STAGE_GROUND = 2, // Ground pass
+		STAGE_OVERLAY = 3, // Overlay replay
 		STAGE_COUNT
 	};
 
