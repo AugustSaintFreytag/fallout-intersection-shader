@@ -1,6 +1,7 @@
 #include "TopperPasses.hpp"
 
 #include "Dependencies.hpp"
+#include "DrawRedirect.hpp"
 #include "RenderStates.hpp"
 #include "StencilTags.hpp"
 #include "Settings.hpp"
@@ -26,7 +27,8 @@
 // toppers, and `TopperBlend` marks the toppers in front of a base. The second replay draws colour where `TOPPER_BIT`
 // is set and writes the topper's own `TERRAIN_BLEND_BIT`. It draws the same geometry with the same shaders, so its
 // depth equals the depth of the first replay and passes the depth test of each pass. The depth copy stays valid.
-// `TopperBlend` fades the foot of each topper into the floor afterwards.
+// A third replay draws the texture features of the marked toppers with the topper feature shader. `TopperBlend` then
+// fades the foot of each topper into the floor.
 //
 // A pass inherits render states from the passes before it and from its pass group. `BSBatchRenderer` locks alpha test
 // and alpha to coverage for each pass group (GAME - 0xB9A120). The recorder keeps the states a pass starts with.
@@ -49,6 +51,11 @@ namespace TopperPasses {
 	static constexpr D3DRENDERSTATETYPE kLockedStates[] = { D3DRS_ALPHATESTENABLE, D3DRS_ADAPTIVETESS_Y, D3DRS_POINTSIZE };
 
 	static constexpr uint32_t TEXTURE_STAGE_COUNT = 16;
+
+	// Index of `D3DRS_ZWRITEENABLE` in `kInheritedStates`. Passes without depth writes, such as further light passes,
+	// add nothing to the texture features.
+	static constexpr uint32_t Z_WRITE_INDEX = 1;
+	static_assert(kInheritedStates[Z_WRITE_INDEX] == D3DRS_ZWRITEENABLE);
 
 	// Ends the technique of the current shader and pass type, and clears both (GAME - 0xB988E0). cdecl, no arguments.
 	// The per-pass draw function starts a technique when the shader or pass type changes (GAME - 0xB99390).
@@ -152,17 +159,19 @@ namespace TopperPasses {
 			for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++)
 				kStates.Force(kLockedStates[i], itFirst->uiLocked[i]);
 
-			const auto DrawPasses = [&]() {
+			// The feature replay only draws passes with depth writes, and keeps the stencil reference of the caller.
+			const auto DrawPasses = [&](bool abFeatures) {
 				uint32_t uiDrawn = 0;
 				for (auto it = itFirst; it != kRecordedPasses.end(); ++it) {
-					if (it->pTarget != apTarget)
+					if (it->pTarget != apTarget || (abFeatures && !it->uiInherited[Z_WRITE_INDEX]))
 						continue;
 
 					for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++)
 						pRenderState->SetRenderState(kInheritedStates[i], it->uiInherited[i], 0, false);
 					for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++)
 						kStates.Update(kLockedStates[i], it->uiLocked[i]);
-					kStates.Update(D3DRS_STENCILREF, it->uiTags);
+					if (!abFeatures)
+						kStates.Update(D3DRS_STENCILREF, it->uiTags);
 					SetZFunc(pRenderState, pDevice, it->uiZFunc);
 
 					TerrainPasses::DrawPass(it->pRenderPass, it->uiPassType, it->uiArg2, it->uiArg3, it->uiArg4);
@@ -175,7 +184,7 @@ namespace TopperPasses {
 			{
 				ForcedRenderStates kDepthOnly(pRenderState);
 				kDepthOnly.Force(D3DRS_COLORWRITEENABLE, 0);
-				uiCount = DrawPasses();
+				uiCount = DrawPasses(false);
 			}
 
 			// The depth with the toppers, for the topper blend and everything after the replay. The RESZ resolve of
@@ -190,7 +199,26 @@ namespace TopperPasses {
 			// Colour where `TOPPER_BIT` is set, and the topper's own `TERRAIN_BLEND_BIT`.
 			kStates.Update(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
 			kStates.Update(D3DRS_STENCILWRITEMASK, StencilTags::TERRAIN_BLEND_BIT);
-			DrawPasses();
+			DrawPasses(false);
+
+			// Texture features where the composite blends: toppers in front of a tagged base. The depth test passes as
+			// in the colour replay. Colour writes go to the feature target only.
+			IDirect3DPixelShader9* pFeatureShader = bBlend ? TopperBlend::BeginFeatures(pDevice) : nullptr;
+			if (pFeatureShader) {
+				ForcedRenderStates kFeatureStates(pRenderState);
+				kFeatureStates.Force(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE | D3DCOLORWRITEENABLE_ALPHA);
+				kFeatureStates.Force(D3DRS_ALPHABLENDENABLE, FALSE);
+				kFeatureStates.Force(D3DRS_ZWRITEENABLE, FALSE);
+				kStates.Update(D3DRS_STENCILMASK, StencilTags::TOPPER_BIT | StencilTags::TOPPER_BASE_BIT);
+				kStates.Update(D3DRS_STENCILREF, StencilTags::TOPPER_BIT | StencilTags::TOPPER_BASE_BIT);
+				kStates.Update(D3DRS_STENCILWRITEMASK, 0);
+
+				DrawRedirect::SetMode(DrawRedirect::MODE_TOPPER_FEATURES);
+				DrawRedirect::BeginPass(pFeatureShader);
+				DrawPasses(true);
+				DrawRedirect::SetMode(DrawRedirect::MODE_OFF);
+				TopperBlend::EndFeatures(pDevice);
+			}
 		}
 
 		// After the group locks are released, as in `RenderBatches`. The technique restores the states it changed.

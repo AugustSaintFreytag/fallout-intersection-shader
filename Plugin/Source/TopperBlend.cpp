@@ -14,9 +14,10 @@
 //
 // `CopyBase` runs before the depth replay. It copies the scene depth and the scene colour, which do not hold the
 // toppers yet. `MarkBases` runs after the depth replay and sets `TOPPER_BASE_BIT` where a topper lies in front of a
-// tagged base. `Composite` runs after the colour replay. Over the static blend range above a floor, it blends the
-// copied base colour over the topper's foot, with the same edge and contact shadow as the terrain overlay. The toppers
-// keep their depth. AO and the ground pass see them whole.
+// tagged base. Between `BeginFeatures` and `EndFeatures`, after the colour replay, the topper passes draw a third time
+// with the topper feature shader into a feature target. `Composite` then blends the copied base colour over the
+// topper's foot over the static blend range above a floor. It shapes the edge with the features and adds the contact
+// shadow, like the terrain overlay. The toppers keep their depth. AO and the ground pass see them whole.
 //
 // All passes set device state directly and restore it with a state block. The game's state caches never see a change.
 //
@@ -42,6 +43,7 @@ namespace TopperBlend {
 	static NiD3DVertexShader* pVertexShader = nullptr;
 	static NiD3DPixelShader* pCopyShader = nullptr;
 	static NiD3DPixelShader* pCompositeShader = nullptr;
+	static NiD3DPixelShader* pFeatureShader = nullptr;
 	static IDirect3DVertexDeclaration9* pDeclaration = nullptr;
 	static bool bReady = false;
 
@@ -56,6 +58,18 @@ namespace TopperBlend {
 	static uint32_t uiHeight = 0;
 	static D3DFORMAT eColorFormat = D3DFMT_UNKNOWN;
 
+	// Texture features of the toppers, 0.5 + features / 2 in red. The target matches the multisampling of the scene's
+	// depth-stencil surface, whose stencil the feature replay tests. It is resolved into the texture for the composite.
+	static IDirect3DSurface9* pFeatureTarget = nullptr;
+	static IDirect3DTexture9* pFeatureTexture = nullptr; // A8R8G8B8
+	static IDirect3DSurface9* pFeatureSurface = nullptr;
+	static D3DMULTISAMPLE_TYPE eFeatureMultisample = D3DMULTISAMPLE_NONE;
+	static bool bFeaturesReady = false; // The feature texture holds this frame's features.
+
+	// Feature replay state, kept from `BeginFeatures` to `EndFeatures`
+	static IDirect3DSurface9* pFeatureSavedTarget = nullptr;
+	static D3DVIEWPORT9 kFeatureSavedViewport;
+
 	template <typename T>
 	static void SafeRelease(T*& apObject) {
 		if (apObject) {
@@ -64,7 +78,16 @@ namespace TopperBlend {
 		}
 	}
 
+	static void ReleaseFeatureResources() {
+		SafeRelease(pFeatureTarget);
+		SafeRelease(pFeatureSurface);
+		SafeRelease(pFeatureTexture);
+		eFeatureMultisample = D3DMULTISAMPLE_NONE;
+		bFeaturesReady = false;
+	}
+
 	static void ReleaseResources() {
+		ReleaseFeatureResources();
 		SafeRelease(pBaseDepthSurface);
 		SafeRelease(pBaseDepthTexture);
 		SafeRelease(pBaseColorSurface);
@@ -87,6 +110,11 @@ namespace TopperBlend {
 		pVertexShader = Dependencies::CreateVertexShader("IntersectionBlend\\GroundQuad.vso");
 		pCopyShader = Dependencies::CreatePixelShader("IntersectionBlend\\TopperCopy.pso");
 		pCompositeShader = Dependencies::CreatePixelShader("IntersectionBlend\\TopperComposite.pso");
+		pFeatureShader = Dependencies::CreatePixelShader("IntersectionBlend\\TopperFeatures.pso");
+		if (pFeatureShader)
+			pFeatureShader->IncRefCount();
+		else
+			_MESSAGE("Failed to load the topper feature shader, the topper blend has no texture features");
 		if (!pVertexShader || !pCopyShader || !pCompositeShader) {
 			_MESSAGE("Failed to load the topper blend shaders (VS %p, copy %p, composite %p), toppers do not blend", pVertexShader, pCopyShader, pCompositeShader);
 			return;
@@ -235,6 +263,69 @@ namespace TopperBlend {
 		pStateBlock->Apply();
 	}
 
+	// Creates the feature target and texture at the base size, with the multisampling of the given depth-stencil surface,
+	// if missing or different. Returns false if creation fails.
+	static bool CreateFeatureResources(IDirect3DDevice9* apDevice, IDirect3DSurface9* apDepthStencil) {
+		D3DSURFACE_DESC kDesc;
+		if (!apDepthStencil || FAILED(apDepthStencil->GetDesc(&kDesc)))
+			return false;
+		if (pFeatureTarget && eFeatureMultisample == kDesc.MultiSampleType)
+			return true;
+
+		ReleaseFeatureResources();
+		if (FAILED(apDevice->CreateRenderTarget(uiWidth, uiHeight, D3DFMT_A8R8G8B8, kDesc.MultiSampleType, kDesc.MultiSampleQuality, FALSE, &pFeatureTarget, nullptr))
+			|| FAILED(apDevice->CreateTexture(uiWidth, uiHeight, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &pFeatureTexture, nullptr))
+			|| FAILED(pFeatureTexture->GetSurfaceLevel(0, &pFeatureSurface))) {
+			_MESSAGE("Failed to create the topper feature target (%u x %u, multisample type %u), the topper blend has no texture features", uiWidth, uiHeight, kDesc.MultiSampleType);
+			ReleaseFeatureResources();
+			return false;
+		}
+
+		eFeatureMultisample = kDesc.MultiSampleType;
+		_MESSAGE("Topper feature target created (%u x %u, multisample type %u)", uiWidth, uiHeight, kDesc.MultiSampleType);
+		return true;
+	}
+
+	// Binds the cleared feature target in place of the scene target and returns the topper feature shader, or null if
+	// texture features are unavailable. The caller replays the topper passes with that shader, then calls `EndFeatures`.
+	// Call after `CopyBase` and the colour replay, with the scene's depth-stencil surface bound.
+	IDirect3DPixelShader9* BeginFeatures(IDirect3DDevice9* apDevice) {
+		bFeaturesReady = false;
+		if (!pFeatureShader || !pBaseDepthTexture)
+			return nullptr;
+
+		IDirect3DSurface9* pDepthStencil = nullptr;
+		apDevice->GetDepthStencilSurface(&pDepthStencil);
+		const bool bCreated = CreateFeatureResources(apDevice, pDepthStencil);
+		SafeRelease(pDepthStencil);
+		if (!bCreated)
+			return nullptr;
+
+		apDevice->GetRenderTarget(0, &pFeatureSavedTarget);
+		apDevice->GetViewport(&kFeatureSavedViewport);
+		apDevice->SetRenderTarget(0, pFeatureTarget);
+
+		// Clears honour the scissor rectangle. Neutral features where no topper draws.
+		DWORD uiScissor = FALSE;
+		apDevice->GetRenderState(D3DRS_SCISSORTESTENABLE, &uiScissor);
+		apDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, FALSE);
+		apDevice->Clear(0, nullptr, D3DCLEAR_TARGET, D3DCOLOR_ARGB(255, 128, 0, 0), 1.0f, 0);
+		apDevice->SetRenderState(D3DRS_SCISSORTESTENABLE, uiScissor);
+		return pFeatureShader->GetShaderHandle();
+	}
+
+	// Binds the scene target again and resolves the features into the feature texture.
+	void EndFeatures(IDirect3DDevice9* apDevice) {
+		if (!pFeatureSavedTarget)
+			return;
+
+		// Setting a render target resets the viewport.
+		apDevice->SetRenderTarget(0, pFeatureSavedTarget);
+		apDevice->SetViewport(&kFeatureSavedViewport);
+		SafeRelease(pFeatureSavedTarget);
+		bFeaturesReady = SUCCEEDED(apDevice->StretchRect(pFeatureTarget, nullptr, pFeatureSurface, nullptr, D3DTEXF_NONE));
+	}
+
 	// Blends the base colour over the foot of toppers on floors, with the contact shadow on the topper above it.
 	// The given scene depth must hold the toppers.
 	// Call after the colour replay of the toppers, after `CopyBase` and `MarkBases`.
@@ -260,7 +351,7 @@ namespace TopperBlend {
 			{ 1.0f / uiWidth, 1.0f / uiHeight, 0.0f, 0.0f },
 			{ kEye.x, kEye.y, kEye.z, 0.0f },
 			{ Settings::fStaticBlendRange, Settings::fEdgeSoftness, bDebugView ? static_cast<float>(Settings::eDebugMode) : 0.0f, Settings::fContactShadow * Settings::fStaticContactShadowFactor },
-			{ Settings::fContactShadowWidth, 0.0f, 0.0f, 0.0f },
+			{ Settings::fContactShadowWidth, bFeaturesReady ? Settings::fEdgeFeatureStrength : 0.0f, Settings::eDebugMode == Settings::DEBUG_EDGE_FEATURES ? 1.0f : 0.0f, 0.0f },
 		};
 		apDevice->SetPixelShaderConstantF(0, fConstants[0], 9);
 
@@ -285,7 +376,9 @@ namespace TopperBlend {
 		BindTexture(apDevice, 0, apDepthTexture);
 		BindTexture(apDevice, 1, pBaseDepthTexture);
 		BindTexture(apDevice, 2, pBaseColorTexture);
+		BindTexture(apDevice, 3, bFeaturesReady ? pFeatureTexture : nullptr);
 		DrawTriangle(apDevice, pCompositeShader);
+		bFeaturesReady = false;
 
 		pStateBlock->Apply();
 	}

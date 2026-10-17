@@ -47,6 +47,7 @@ Add-Shader 'vs_3_0' 'Ground\GroundQuad.hlsl' "$pluginOut\GroundQuad.vso" @()
 Add-Shader 'ps_3_0' 'Ground\GroundField.hlsl' "$pluginOut\GroundField.pso" @()
 Add-Shader 'ps_3_0' 'Toppers\TopperBlend.hlsl' "$pluginOut\TopperCopy.pso" @('COPY')
 Add-Shader 'ps_3_0' 'Toppers\TopperBlend.hlsl' "$pluginOut\TopperComposite.pso" @('COMPOSITE')
+Add-Shader 'ps_3_0' 'Toppers\TopperFeatures.hlsl' "$pluginOut\TopperFeatures.pso" @()
 
 # Ground mode pixel shaders: 7 texture counts x (no point lights, 6, 12, 24 point lights), one set per terrain shader mod.
 # File name T<texture count>L<point lights>.pso. The plugin picks the set that matches the installed terrain shaders.
