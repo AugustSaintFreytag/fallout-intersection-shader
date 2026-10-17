@@ -3,7 +3,7 @@
 #include "Settings.hpp"
 
 // In-game keys for testing, read with `GetAsyncKeyState` while the game window has focus.
-// `[Main] iToggleKey` turns the terrain overlay and the topper crop on and off. Toppers stay deferred and stencil tags
+// `[Main] iToggleKey` turns the terrain overlay and the topper blend on and off. Toppers stay deferred and stencil tags
 // are still written. Only the blending itself is skipped.
 // `[Main] iReloadKey` reads the live settings from `IntersectionBlend.ini` again (`Settings::LoadLive`).
 

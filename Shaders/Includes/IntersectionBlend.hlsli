@@ -1,6 +1,4 @@
-// Blend math for the terrain overlay and the topper crop.
-
-#include "Noise.hlsli"
+// Blend math for the terrain overlay and the topper blend.
 
 // Height within which the visible surface touches the terrain and blends fully, in game units.
 static const float SelfHeight = 0.5f;
@@ -44,16 +42,32 @@ float IntersectionBlendFactor(float height, float3 groundNormal, float3 surfaceN
     return min(surfaceFade, climbFade);
 }
 
-// Lowest reach of an edge. Keeps the contact line covered where the height and noise are lowest.
-static const float MinEdgeReach = 0.15f;
+// Edge
 
-// Returns the reach of a hard edge at a world position, in [`MinEdgeReach`, 1].
-// The edge lies where a blend amount, 1 at the contact line and 0 at the end of its range, equals 1 minus the reach.
-// The reach is 0.5, raised by grain noise and by the material height where it is known (0.5 elsewhere).
-// The terrain overlay and the topper crop both cut with it, so their edges look alike.
-float GetEdgeReach(float2 world, float materialHeight, float heightInfluence, float noiseAmount, float grainSize) {
-    float noise = GrainNoise(world, grainSize) * 2.0f - 1.0f;
-    return clamp(0.5f + heightInfluence * (materialHeight - 0.5f) + noiseAmount * noise, MinEdgeReach, 1.0f);
+static const float MinEdgeWidth = 0.001f;
+static const float MinShadowWidth = 0.01f;
+
+// Returns the coverage of the lower material over a surface (x) and the contact shadow on the surface (y), from a
+// blend amount: 1 at the contact line, 0 at the end of the blend range.
+//
+// The coverage fades over the given width, in blend amount, around half the amount. The contact shadow darkens the
+// surface where the material meets it. It is at full intensity at the edge and under the coverage, and fades out over
+// the shadow width below half the amount. The terrain overlay and the topper blend share it, so both look alike.
+float2 GetEdgeCoverage(float amount, float width, float shadowIntensity, float shadowWidth) {
+    float coverage = saturate((amount - 0.5f) / max(width, MinEdgeWidth) + 0.5f);
+    float shadowDistance = saturate((0.5f - amount) / max(shadowWidth, MinShadowWidth));
+    float shadow = shadowIntensity * (1.0f - smoothstep(0.0f, 1.0f, shadowDistance));
+    return float2(coverage, shadow);
+}
+
+// Returns the output of a pass that blends with source alpha: the lower material's colour by its coverage over the
+// surface, darkened by the contact shadow.
+//
+// The result is colour × coverage + surface × (1 − shadow) × (1 − coverage). The alpha is
+// 1 − (1 − shadow) × (1 − coverage), and the colour is colour × coverage over that alpha.
+float4 ComposeEdge(float3 color, float2 coverageShadow) {
+    float alpha = 1.0f - (1.0f - coverageShadow.y) * (1.0f - coverageShadow.x);
+    return float4(alpha > 0.0f ? color * coverageShadow.x / alpha : 0.0f, alpha);
 }
 
 // Size of a landscape block, a quarter of a cell. Blocks lie on a world-aligned grid.
