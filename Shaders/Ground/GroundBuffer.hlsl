@@ -3,7 +3,7 @@
 // Reads the scene depth copy of Depth Resolve, the height field and the attribute fields.
 // Writes two R32G32B32A32F targets, bound to s14 and s15 in the terrain shaders (`PS_OUTPUT`).
 //
-// The overlay reads these buffers instead of the scene depth. The terrain shaders keep their sampler layout.
+// The overlay reads these buffers instead of the scene depth.
 
 #include "../Includes/Depth.hlsli"
 #include "../Includes/IntersectionBlend.hlsli"
@@ -25,9 +25,11 @@ float4 TexelSize : register(c0);
 
 VS_OUTPUT main(VS_INPUT IN) {
     VS_OUTPUT OUT;
+
     // D3D9 half-pixel offset so texels map onto pixels.
     OUT.position = float4(IN.position.xy + float2(-TexelSize.x, TexelSize.y), 0.0f, 1.0f);
     OUT.uv = IN.uv;
+    
     return OUT;
 }
 
@@ -37,6 +39,7 @@ VS_OUTPUT main(VS_INPUT IN) {
 
 sampler2D SceneDepth : register(s0);
 sampler2D HeightField : register(s1);
+
 // Attribute fields, texel for texel with the height field
 sampler2D FieldBlend0 : register(s2);   // Blend weights 0-3
 sampler2D FieldBlend1 : register(s3);   // Blend weights 4-6, a = block code
@@ -56,21 +59,31 @@ float4 BlendParams : register(c17);             // x = climb height
 
 static const float NO_GROUND = 1.0e9f;
 
-// D3D9 rasterizes at whole-number window coordinates. The texel or pixel at column i holds what lies at
-// clip x = 2 i / width - 1, half a texel left of its centre. The same applies to rows.
+// D3D9 rasterizes at whole-number window coordinates. 
+// The texel or pixel at column i holds what lies at
+// clip x = 2 * i / width - 1
+// Half a texel left of its own centee.
 
 // Returns the eye-relative world position of the terrain in a height field texel.
-// Clears the valid flag if no terrain was drawn there. The height field is cleared to 0, the far plane with reversed depth.
+// Clears the valid flag if no terrain was drawn.
 float3 GetFieldPoint(float2 texel, inout bool valid) {
     float depth = tex2Dlod(HeightField, float4((texel + 0.5f) * FieldParams.xy, 0.0f, 0.0f)).r;
     valid = valid && depth > 0.0f;
+    
     float2 position = texel * FieldParams.xy;
     float4 clip = float4(position.x * 2.0f - 1.0f, 1.0f - position.y * 2.0f, depth, 1.0f);
     float4 world = mul(clip, FieldToWorld);
+    
     return world.xyz / world.w;
 }
 
-// Returns the height field texel coordinates of an eye-relative world position. Texel i lies at i.
+// Returns the bilinear blend of the four points of a field cell, in the order (0, 0), (1, 0), (0, 1), (1, 1).
+float3 BilinearPoint(float3 p00, float3 p10, float3 p01, float3 p11, float2 blend) {
+    return lerp(lerp(p00, p10, blend.x), lerp(p01, p11, blend.x), blend.y);
+}
+
+// Returns the height field texel coordinates of an eye-relative world position. 
+// Texel i lies at i (is that so).
 float2 GetFieldTexel(float3 position) {
     float4 fieldClip = mul(float4(position, 1.0f), WorldToField);
     return (float2(fieldClip.x, -fieldClip.y) / fieldClip.w * 0.5f + 0.5f) / FieldParams.xy;
@@ -82,6 +95,7 @@ float3 GetSurface(float2 uv, out float sceneDepth) {
     float2 window = uv - 0.5f * ScreenParams.xy;
     float2 ndc = float2(window.x * 2.0f - 1.0f, 1.0f - window.y * 2.0f);
     float3 viewPosition = float3((ndc.x - ProjectionParams.z) / ProjectionParams.x, (ndc.y - ProjectionParams.w) / ProjectionParams.y, 1.0f) * sceneDepth;
+    
     return viewPosition.x * ViewToWorld[0].xyz + viewPosition.y * ViewToWorld[1].xyz + viewPosition.z * ViewToWorld[2].xyz;
 }
 
@@ -97,8 +111,7 @@ struct FieldAttributes {
 };
 
 // Returns blend weights and vertex colour at an eye-relative ground point.
-// Interpolates bilinearly between the texels of the point's own landscape block. Texels of a neighbouring block weigh
-// other textures and are left out.
+// Interpolates bilinearly between the texels of the point's own landscape block. 
 FieldAttributes GetFieldAttributes(float3 groundPoint) {
     float2 texel = GetFieldTexel(groundPoint);
     float2 base = floor(texel);
@@ -145,17 +158,20 @@ FieldAttributes GetFieldAttributes(float3 groundPoint) {
     return result;
 }
 
-// Ground buffer targets. Pixels without terrain under them or beyond the maximum distance get zero in both targets.
+// Ground buffer targets.
+// Is zero for pixels without terrain or beyond the maximum distance.
+//
 // The overlay shades every pixel from these targets alone (`GetGroundSample`):
-//   COLOR0 = xyz: eye-relative ground point that shades the surface (its foot, unrolled if enabled),
+//   COLOR0 = xyz: eye-relative ground point that shades the surface (its foot/lip, unrolled if enabled),
 //            w: terrain normal x and y, as 2 x 12 bits of x * 0.5 + 0.5
 //   COLOR1 = 3 x 8 bits per channel: x = blend weights 0-2, y = blend weights 3-5, z = blend weight 6 and vertex
 //            colour r, g, w = vertex colour b, blend amount, distance fade
 //
-// Height layout, for debug mode 4 only. The overlay does not run with it. Pixels without terrain under them get
+// Height layout (debug mode 4 only)
+// For pixels without terrain under them:
 // `NO_GROUND` in COLOR0.g:
-//   COLOR0 = linear view depth of the visible surface, height of the surface above the terrain under it along the
-//            terrain normal, terrain normal x and y (z is positive)
+//   COLOR0 = linear view depth of the visible surface, height of the surface above the 
+//            terrain under it along the terrain normal, terrain normal x and y (z is positive)
 //   COLOR1 = 0
 struct PS_OUTPUT {
     float4 target0 : COLOR0;
@@ -174,7 +190,7 @@ PS_OUTPUT main(VS_OUTPUT IN) {
     if (sceneDepth > FieldParams.z)
         return result;
 
-    // Height field texel under the surface and its neighbours for bilinear interpolation.
+    // Height field texel under the surface.
     float2 texel = GetFieldTexel(surface);
     if (any(texel < 0.0f) || any(texel * FieldParams.xy > 1.0f))
         return result;
@@ -182,16 +198,44 @@ PS_OUTPUT main(VS_OUTPUT IN) {
     float2 base = floor(texel);
     float2 blend = texel - base;
 
+    // Texels from one before to two after the base on each axis, without four corners. 
+    // points[y][x] holds the texel at base + (x - 1, y - 1). 
+    // Inner four have ground interpolation.
     bool valid = true;
-    float3 p00 = GetFieldPoint(base, valid);
-    float3 p10 = GetFieldPoint(base + float2(1.0f, 0.0f), valid);
-    float3 p01 = GetFieldPoint(base + float2(0.0f, 1.0f), valid);
-    float3 p11 = GetFieldPoint(base + float2(1.0f, 1.0f), valid);
+    bool outerValid = true;
+    float3 points[4][4];
+    [unroll] for (int y = 0; y < 4; y++) {
+        [unroll] for (int x = 0; x < 4; x++) {
+            bool inner = x >= 1 && x <= 2 && y >= 1 && y <= 2;
+            bool corner = (x == 0 || x == 3) && (y == 0 || y == 3);
+            points[y][x] = 0.0f;
+            if (inner)
+                points[y][x] = GetFieldPoint(base + float2(x - 1, y - 1), valid);
+            else if (!corner)
+                points[y][x] = GetFieldPoint(base + float2(x - 1, y - 1), outerValid);
+        }
+    }
     if (!valid)
         return result;
 
-    float groundZ = lerp(lerp(p00.z, p10.z, blend.x), lerp(p01.z, p11.z, blend.x), blend.y);
-    float3 groundNormal = normalize(cross((p10 - p00) + (p11 - p01), (p01 - p00) + (p11 - p10)));
+    float3 groundPointCenter = BilinearPoint(points[1][1], points[1][2], points[2][1], points[2][2], blend);
+    float groundZ = groundPointCenter.z;
+
+    // Normal from the interpolated ground one texel to each side.
+    // Continuous across texel borders.
+    // A normal from the four texels of one cell alone jumps at every border, height jumps too.
+    // Falls back to original cell normal where a neighboring texel has no terrain.
+    float3 groundNormal;
+    if (outerValid) {
+        float3 groundDx = BilinearPoint(points[1][2], points[1][3], points[2][2], points[2][3], blend)
+            - BilinearPoint(points[1][0], points[1][1], points[2][0], points[2][1], blend);
+        float3 groundDy = BilinearPoint(points[2][1], points[2][2], points[3][1], points[3][2], blend)
+            - BilinearPoint(points[0][1], points[0][2], points[1][1], points[1][2], blend);
+        groundNormal = normalize(cross(groundDx, groundDy));
+    } else {
+        groundNormal = normalize(cross((points[1][2] - points[1][1]) + (points[2][2] - points[2][1]),
+            (points[2][1] - points[1][1]) + (points[2][2] - points[1][2])));
+    }
     groundNormal *= groundNormal.z < 0.0f ? -1.0f : 1.0f;
 
     float height = (surface.z - groundZ) * groundNormal.z;
@@ -217,7 +261,7 @@ PS_OUTPUT main(VS_OUTPUT IN) {
 
     FieldAttributes attributes = GetFieldAttributes(groundPoint);
 
-    // Debug mode 7: vertex colour and blend weight 7 as plain floats, without packing.
+    // Debug mode 7: vertex colour and blend weight 7 as plain floats, no packing.
     if (GroundParams.w > 0.5f) {
         result.target0 = float4(groundPoint, PackUnorm2x12(groundNormal.xy * 0.5f + 0.5f));
         result.target1 = float4(attributes.vertexColor, attributes.blend1.z);
