@@ -20,41 +20,28 @@
 // LOD Flicker Fix patches `m_kD3DProj._33` and `_43` at +0x9E8 and +0x9F8 (GAME - 0xE6CBB7).
 ASSERT_OFFSET(NiDX9Renderer, m_kD3DProj, 0x9C0);
 
-// Builds what the terrain overlay knows about the ground under each visible surface.
-//
-// Two steps run right before the overlay:
-// 1. Height field: an orthographic camera looking straight down draws the recorded landscape passes again, into a
-//    depth texture around the camera. Terrain does not move. The field is only redrawn in full when the camera moves
-//    away from its centre. In between, only landscape blocks not in it yet are drawn. The field shader writes blend
-//    weights and vertex colour into the attribute fields in the same draw. Both are per vertex, 128 units apart.
-//    The fields hold them without loss at 8 units per texel.
-// 2. Ground buffer: a full-screen pass rebuilds every visible surface point from the scene depth and looks up the
-//    terrain under it. It writes linear depth, height above the terrain and the terrain normal per pixel. In ground
-//    mode it writes the ground point that shades the surface instead, with the overlay opacity and the attributes there.
-//
-// The overlay reads the two ground buffer targets from s14 and s15.
-//
-// Reference at "Shaders/Ground/GroundBuffer.hlsl", "PS_OUTPUT".
 namespace GroundBuffer {
 
-	// Height field: `FIELD_SIZE`² texels over twice `[Blend] fMaxDistance` around the camera.
-	// 8 units per texel by default. Terrain vertices are 128 units apart.
+	// Height field: (field size)^2 texels over (2 * max distance) around camera.
+	// 8 units per texel by default. 
+	// Terrain vertices are 128 units apart.
 	// The field camera sits `FIELD_DEPTH` / 2 above the scene camera and sees `FIELD_DEPTH` down.
+	
 	static constexpr uint32_t FIELD_SIZE = 1024;
 	static constexpr float FIELD_DEPTH = 65536.0f;
 	static constexpr float FIELD_RECENTER_DISTANCE = 512.0f;
 	static constexpr uint32_t TERRAIN_SAMPLER_COUNT = 14; // `BaseMap[7]` and `NormalMap[7]`
 
-	// Must match "Shaders/Ground/GroundField.hlsl".
+	// Matches "Shaders/Ground/GroundField.hlsl".
 	static constexpr uint32_t BLOCK_CONSTANT_REGISTER = 92; // `IBBlock`
 	static constexpr float LANDSCAPE_BLOCK_SIZE = 2048.0f;
 
-	// Attribute fields, one per target: blend weights 0-3, blend weights 4-6 with the block code, vertex colour.
+	// Attribute fields, (1) blend weights 0-3, (2) blend weights 4-6 with block code, (3) vertex color.
 	static constexpr uint32_t FIELD_TARGET_COUNT = 3;
 	static constexpr uint32_t FIELD_SAMPLER = 2; // s2-s4 in the ground pass
 
 	// `NiRenderer::SetCameraData(location, direction, up, right, frustum, port)` (GAME - 0x4E9C90).
-	// Checks that a frame is in progress and calls `NiDX9Renderer::Do_SetCameraData` through the vtable.
+	// Checks that a frame is in progress and sets camera data.
 	static constexpr uint32_t SET_CAMERA_DATA = 0x4E9C90;
 
 	struct FullscreenVertex {
@@ -69,6 +56,7 @@ namespace GroundBuffer {
 
 	// Device Resources
 	// Released before a device reset and created again on demand.
+
 	static IDirect3DTexture9* pFieldTexture = nullptr; // INTZ
 	static IDirect3DSurface9* pFieldDepth = nullptr;
 	static IDirect3DTexture9* pAttributeTextures[FIELD_TARGET_COUNT] = {}; // A8R8G8B8, texel for texel with the height field
@@ -78,15 +66,16 @@ namespace GroundBuffer {
 	static IDirect3DTexture9* pPointTexture = nullptr; // Ground points, the second ground pass target.
 	static IDirect3DSurface9* pPointSurface = nullptr;
 	static IDirect3DStateBlock9* pStateBlock = nullptr;
+
 	static uint32_t uiGroundWidth = 0;
 	static uint32_t uiGroundHeight = 0;
 
 	// Height Field Contents
+
 	static bool bFieldValid = false;
 	static NiPoint3 kFieldCenter;
 	static D3DXMATRIX kFieldViewProj;
-	// Landscape geometry drawn into the height field, with its bound centre at the time.
-	// Geometry is freed when cells unload and its address reused. A block only counts as drawn while it stays in place.
+
 	static std::unordered_map<const NiGeometry*, NiPoint3> kFieldGeometry;
 
 	static bool IsInField(const NiGeometry* apGeometry) {
@@ -136,7 +125,7 @@ namespace GroundBuffer {
 	}
 
 	// Creates the height field and the attribute fields if missing.
-	// Disables the ground buffer and returns false if creation fails.
+	// If create fails, disables the ground buffer and returns false.
 	static bool CreateFieldResources(IDirect3DDevice9* apDevice) {
 		if (pFieldDepth)
 			return true;
@@ -159,7 +148,7 @@ namespace GroundBuffer {
 	}
 
 	// Creates the ground buffer targets at the given size if missing or sized differently.
-	// Disables the ground buffer and returns false if creation fails.
+	// If create fails, disables the ground buffer and returns false.
 	static bool CreateGroundResources(IDirect3DDevice9* apDevice, uint32_t auiWidth, uint32_t auiHeight) {
 		if (pGroundSurface && uiGroundWidth == auiWidth && uiGroundHeight == auiHeight)
 			return true;
