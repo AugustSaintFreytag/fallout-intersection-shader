@@ -20,13 +20,26 @@
 // LOD Flicker Fix patches `m_kD3DProj._33` and `_43` at +0x9E8 and +0x9F8 (GAME - 0xE6CBB7).
 ASSERT_OFFSET(NiDX9Renderer, m_kD3DProj, 0x9C0);
 
+// Builds what the terrain overlay knows about the ground under each visible surface.
+//
+// Two steps run right before the overlay:
+// 1. Height field: An orthographic camera looking straight down redraws the recorded landscape passes, into a
+//    depth texture around the camera. Terrain does not move. The field is only redrawn in full when the camera moves
+//    away from its centre. In between, only landscape blocks not in it yet are drawn. The field shader writes blend
+//    weights and vertex colour into the attribute fields in the same draw. Both are per vertex, 128 units apart.
+//    The fields hold them without loss at 8 units per texel.
+// 2. Ground buffer: a full-screen pass rebuilds every visible surface point from the scene depth and looks up the
+//    terrain under it. It writes linear depth, height above the terrain and the terrain normal per pixel. In ground
+//    mode it writes the ground point that shades the surface instead, with the overlay opacity and the attributes there.
+//
+// The overlay reads the two available ground buffer targets from s14 and s15.
 namespace GroundBuffer {
 
 	// Height field: (field size)^2 texels over (2 * max distance) around camera.
 	// 8 units per texel by default. 
 	// Terrain vertices are 128 units apart.
 	// The field camera sits `FIELD_DEPTH` / 2 above the scene camera and sees `FIELD_DEPTH` down.
-	
+
 	static constexpr uint32_t FIELD_SIZE = 1024;
 	static constexpr float FIELD_DEPTH = 65536.0f;
 	static constexpr float FIELD_RECENTER_DISTANCE = 512.0f;
