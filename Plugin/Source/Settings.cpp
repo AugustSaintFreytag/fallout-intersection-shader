@@ -118,7 +118,7 @@ namespace Settings {
 		bProfile = GetUInt("Debug", "bProfile", bProfile) != 0;
 		bDeferToppers = GetUInt("Debug", "bDeferToppers", bDeferToppers) != 0;
 
-		_MESSAGE("Settings: Enabled %u, toggle key %u, reload key %u, max distance %.1f, %u terrain blend types, %u blacklist entries, %u toppers, profile %u, defer toppers %u",
+		_MESSAGE("Settings: Enabled %u, toggle key 0x%02X, reload key 0x%02X, max distance %.1f, %u terrain blend types, %u blacklist entries, %u toppers, profile %u, defer toppers %u",
 			bEnabled, uiToggleKey, uiReloadKey, fMaxDistance, static_cast<uint32_t>(kBlendTypesTerrainToStatic.size()), static_cast<uint32_t>(kTerrainToStaticBlacklist.size()),
 			static_cast<uint32_t>(kStaticToStaticWhitelist.size()), bProfile, bDeferToppers);
 

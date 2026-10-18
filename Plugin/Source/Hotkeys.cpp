@@ -3,20 +3,31 @@
 #include "Settings.hpp"
 
 // In-game keys for testing, read with `GetAsyncKeyState` while the game window has focus.
+// The INI gives keys as DirectInput scancodes, as in the GECK and NVSE `IsKeyPressed`.
 // `[Main] iToggleKey` turns the terrain overlay and the topper blend on and off. Toppers stay deferred and stencil tags
 // are still written. Only the blending itself is skipped.
 // `[Main] iReloadKey` reads the live settings from `IntersectionBlend.ini` again (`Settings::LoadLive`).
 
 namespace Hotkeys {
 
+	// Returns the Windows virtual-key code of a DirectInput scancode.
+	// Returns 0 if the scancode has no virtual-key code.
+	static uint32_t GetVirtualKey(uint32_t auiScancode) {
+		// DirectInput sets bit 7 for keys sent with the E0 prefix, e.g. arrow keys and right Ctrl.
+		// `MapVirtualKey` takes these keys with the prefix in the high byte.
+		const uint32_t uiScancode = auiScancode & 0x80 ? 0xE000 | (auiScancode & 0x7F) : auiScancode;
+		return MapVirtualKeyA(uiScancode, MAPVK_VSC_TO_VK_EX);
+	}
+
 	// A key that acts once when it goes down.
 	struct Key {
 		bool bDown = false;
 
-		// Returns whether the key went down since the last call.
-		bool Pressed(uint32_t auiCode, bool abFocus) {
+		// Returns whether the key with the given DirectInput scancode went down since the last call.
+		bool Pressed(uint32_t auiScancode, bool abFocus) {
 			const bool bWasDown = bDown;
-			bDown = auiCode != 0 && abFocus && (GetAsyncKeyState(static_cast<int>(auiCode)) & 0x8000) != 0;
+			const uint32_t uiVirtualKey = auiScancode ? GetVirtualKey(auiScancode) : 0;
+			bDown = uiVirtualKey != 0 && abFocus && (GetAsyncKeyState(static_cast<int>(uiVirtualKey)) & 0x8000) != 0;
 			return bDown && !bWasDown;
 		}
 	};
