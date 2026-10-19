@@ -78,8 +78,11 @@ namespace Profiler {
 		for (QuerySet& rSet : kSets) {
 			SafeRelease(rSet.pDisjoint);
 			SafeRelease(rSet.pFrequency);
-			for (IDirect3DQuery9*& rpTimestamp : rSet.pTimestamps)
+
+			for (IDirect3DQuery9*& rpTimestamp : rSet.pTimestamps) {
 				SafeRelease(rpTimestamp);
+			}
+
 			rSet.bPending = false;
 		}
 		bReady = false;
@@ -87,8 +90,10 @@ namespace Profiler {
 	}
 
 	static bool __cdecl OnDeviceReset(bool abBeforeReset, void*) {
-		if (abBeforeReset)
+		if (abBeforeReset) {
 			ReleaseQueries();
+		}
+
 		return true;
 	}
 
@@ -96,8 +101,10 @@ namespace Profiler {
 		for (QuerySet& rSet : kSets) {
 			bool bCreated = SUCCEEDED(pDevice->CreateQuery(D3DQUERYTYPE_TIMESTAMPDISJOINT, &rSet.pDisjoint))
 				&& SUCCEEDED(pDevice->CreateQuery(D3DQUERYTYPE_TIMESTAMPFREQ, &rSet.pFrequency));
-			for (IDirect3DQuery9*& rpTimestamp : rSet.pTimestamps)
+			for (IDirect3DQuery9*& rpTimestamp : rSet.pTimestamps) {
 				bCreated = bCreated && SUCCEEDED(pDevice->CreateQuery(D3DQUERYTYPE_TIMESTAMP, &rpTimestamp));
+			}
+
 			if (!bCreated) {
 				ReleaseQueries();
 				return false;
@@ -110,8 +117,9 @@ namespace Profiler {
 	// Registers for device resets if profiling is on. The queries are created on the first frame.
 	// Call once the D3D device exists, at NVSE DeferredInit.
 	void Initialize() {
-		if (!Settings::bProfile)
+		if (!Settings::bProfile) {
 			return;
+		}
 
 		NiDX9Renderer* pRenderer = NiDX9Renderer::GetSingleton();
 		pDevice = pRenderer->GetD3DDevice();
@@ -131,18 +139,22 @@ namespace Profiler {
 			|| arSet.pFrequency->GetData(&uiFrequency, sizeof(uiFrequency), 0) != S_OK)
 			return false;
 		for (uint32_t i = 0; i <= STAGE_COUNT; i++) {
-			if (arSet.pTimestamps[i]->GetData(&uiTimestamps[i], sizeof(UINT64), 0) != S_OK)
+			if (arSet.pTimestamps[i]->GetData(&uiTimestamps[i], sizeof(UINT64), 0) != S_OK) {
 				return false;
+			}
 		}
 
 		arSet.bPending = false;
+
 		if (bDisjoint || uiFrequency == 0) {
 			uiDroppedFrames++;
 			return true;
 		}
 
-		for (uint32_t i = 0; i < STAGE_COUNT; i++)
+		for (uint32_t i = 0; i < STAGE_COUNT; i++) {
 			kStageTimes[i].Add(static_cast<double>(uiTimestamps[i + 1] - uiTimestamps[i]) * 1000.0 / static_cast<double>(uiFrequency));
+		}
+
 		uiGpuFrames++;
 		return true;
 	}
@@ -152,13 +164,16 @@ namespace Profiler {
 		LARGE_INTEGER kNow;
 		QueryPerformanceCounter(&kNow);
 		const double dElapsed = static_cast<double>(kNow.QuadPart - kIntervalStart.QuadPart) / static_cast<double>(kCounterFrequency.QuadPart);
-		if (dElapsed < LOG_INTERVAL)
+
+		if (dElapsed < LOG_INTERVAL) {
 			return;
+		}
 
 		if (uiGpuFrames) {
 			char cLine[512];
 			int iLength = sprintf_s(cLine, "Profile, %u frames (%u dropped), GPU ms avg/max:", uiGpuFrames, uiDroppedFrames);
 			double dTotal = 0.0;
+
 			for (uint32_t i = 0; i < STAGE_COUNT; i++) {
 				const double dAverage = kStageTimes[i].dSum / uiGpuFrames;
 				dTotal += dAverage;
@@ -183,8 +198,10 @@ namespace Profiler {
 				kTagged.dSum / uiTagFrames, kTagged.dMax, kToppers.dSum / uiTagFrames, kToppers.dMax, kDistant.dSum / uiTagFrames, kDistant.dMax);
 		}
 
-		for (Accumulator& rTime : kStageTimes)
+		for (Accumulator& rTime : kStageTimes) {
 			rTime = {};
+		}
+
 		kReplayCpu = {};
 		kCallbackCpu = {};
 		kTopperCpu = {};
@@ -207,8 +224,10 @@ namespace Profiler {
 
 	// Starts timing a post-resolve callback. Reads finished sets first and logs the interval when it is due.
 	void BeginFrame(IDirect3DDevice9* apDevice) {
-		if (!Settings::bProfile || apDevice != pDevice)
+		if (!Settings::bProfile || apDevice != pDevice) {
 			return;
+		}
+
 		if (!bReady && !CreateQueries()) {
 			_MESSAGE("Profiler: Timestamp queries not supported, profiling disabled");
 			Settings::bProfile = false;
@@ -216,14 +235,16 @@ namespace Profiler {
 		}
 
 		for (QuerySet& rSet : kSets) {
-			if (rSet.bPending)
+			if (rSet.bPending) {
 				ReadSet(rSet);
+			}
 		}
 		LogInterval();
 
 		// A set still in flight is dropped: the GPU is more than `SET_COUNT` frames behind.
 		uiCurrentSet = (uiCurrentSet + 1) % SET_COUNT;
 		QuerySet& rSet = kSets[uiCurrentSet];
+
 		if (rSet.bPending) {
 			rSet.bPending = false;
 			uiDroppedFrames++;
@@ -238,18 +259,22 @@ namespace Profiler {
 
 	// Marks the end of a stage. Stages before it that did not run this frame end at the same time, with 0 ms.
 	void EndStage(Stage aeStage) {
-		if (!bInFrame)
+		if (!bInFrame) {
 			return;
+		}
 
 		QuerySet& rSet = kSets[uiCurrentSet];
-		while (uiNextTimestamp <= static_cast<uint32_t>(aeStage) + 1)
+
+		while (uiNextTimestamp <= static_cast<uint32_t>(aeStage) + 1) {
 			rSet.pTimestamps[uiNextTimestamp++]->Issue(D3DISSUE_END);
+		}
 	}
 
 	// Ends timing a post-resolve callback. Stages that did not run end here.
 	void EndFrame() {
-		if (!bInFrame)
+		if (!bInFrame) {
 			return;
+		}
 
 		EndStage(static_cast<Stage>(STAGE_COUNT - 1));
 		QuerySet& rSet = kSets[uiCurrentSet];
@@ -261,8 +286,9 @@ namespace Profiler {
 	// Records the work of one overlay replay: passes, full-screen triangles drawn, draws skipped, skipped draws with
 	// another vertex buffer, the summed scissor area in screens, and the CPU time spent issuing them.
 	void RecordReplay(uint32_t auiPasses, uint32_t auiDrawn, uint32_t auiSkipped, uint32_t auiForeign, double adScreens, double adCpuMilliseconds) {
-		if (!Settings::bProfile)
+		if (!Settings::bProfile) {
 			return;
+		}
 
 		kPasses.Add(auiPasses);
 		kDrawn.Add(auiDrawn);
@@ -276,8 +302,9 @@ namespace Profiler {
 	// Records the CPU time of one post-resolve callback, of the topper replay in it, and of the depth resolves in that.
 	// Waits for the GPU inside a call show up here and not in the GPU times.
 	void RecordCallbackCpu(double adCallbackMilliseconds, double adTopperMilliseconds, double adResolveMilliseconds) {
-		if (!Settings::bProfile)
+		if (!Settings::bProfile) {
 			return;
+		}
 
 		kCallbackCpu.Add(adCallbackMilliseconds);
 		kTopperCpu.Add(adTopperMilliseconds);
@@ -288,8 +315,9 @@ namespace Profiler {
 	// Records the eligible geometry of one tagged opaque stage: tagged, tagged as toppers, and left untagged beyond
 	// `fMaxDistance`.
 	void RecordTags(uint32_t auiTagged, uint32_t auiToppers, uint32_t auiDistant) {
-		if (!Settings::bProfile)
+		if (!Settings::bProfile) {
 			return;
+		}
 
 		kTagged.Add(auiTagged);
 		kToppers.Add(auiToppers);

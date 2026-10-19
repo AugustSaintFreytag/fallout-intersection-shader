@@ -63,7 +63,13 @@ namespace Hotkeys {
 
 		if (kToggleKey.Pressed(Settings::uiToggleKey, bFocus)) {
 			bBlendActive = !bBlendActive;
-			_MESSAGE("Hotkeys: Blending turned %s.", bBlendActive ? "on" : "off");
+
+			if (bBlendActive) {
+				_MESSAGE("Hotkeys: Blending turned on.");
+			}
+			else {
+				_MESSAGE("Hotkeys: Blending turned off.");
+			}
 		}
 
 		if (kReloadKey.Pressed(Settings::uiReloadKey, bFocus)) {
