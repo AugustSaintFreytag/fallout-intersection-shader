@@ -1,5 +1,6 @@
 #include "Hotkeys.hpp"
 
+#include "PassLog.hpp"
 #include "Settings.hpp"
 
 // In-game keys for testing, read with `GetAsyncKeyState` while the game window has focus.
@@ -13,9 +14,14 @@ namespace Hotkeys {
 	// Returns the Windows virtual-key code of a DirectInput scancode.
 	// Returns 0 if the scancode has no virtual-key code.
 	static uint32_t GetVirtualKey(uint32_t auiScancode) {
+		uint32_t uiScancode = auiScancode;
+
 		// DirectInput sets bit 7 for keys sent with the E0 prefix, e.g. arrow keys and right Ctrl.
 		// `MapVirtualKey` takes these keys with the prefix in the high byte.
-		const uint32_t uiScancode = auiScancode & 0x80 ? 0xE000 | (auiScancode & 0x7F) : auiScancode;
+		if (auiScancode & 0x80) {
+			uiScancode = 0xE000 | (auiScancode & 0x7F);
+		}
+
 		return MapVirtualKeyA(uiScancode, MAPVK_VSC_TO_VK_EX);
 	}
 
@@ -26,8 +32,16 @@ namespace Hotkeys {
 		// Returns whether the key with the given DirectInput scancode went down since the last call.
 		bool Pressed(uint32_t auiScancode, bool abFocus) {
 			const bool bWasDown = bDown;
-			const uint32_t uiVirtualKey = auiScancode ? GetVirtualKey(auiScancode) : 0;
-			bDown = uiVirtualKey != 0 && abFocus && (GetAsyncKeyState(static_cast<int>(uiVirtualKey)) & 0x8000) != 0;
+			bDown = false;
+
+			if (auiScancode != 0 && abFocus) {
+				const uint32_t uiVirtualKey = GetVirtualKey(auiScancode);
+
+				if (uiVirtualKey != 0) {
+					bDown = (GetAsyncKeyState(static_cast<int>(uiVirtualKey)) & 0x8000) != 0;
+				}
+			}
+
 			return bDown && !bWasDown;
 		}
 	};
@@ -55,6 +69,10 @@ namespace Hotkeys {
 		if (kReloadKey.Pressed(Settings::uiReloadKey, bFocus)) {
 			_MESSAGE("Hotkeys: Reloading live settings.");
 			Settings::LoadLive();
+
+			if (Settings::bLogTopperPasses) {
+				PassLog::Arm();
+			}
 		}
 	}
 

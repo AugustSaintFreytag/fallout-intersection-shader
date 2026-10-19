@@ -1,5 +1,6 @@
 #include "TerrainPasses.hpp"
 
+#include "PassLog.hpp"
 #include "StencilTags.hpp"
 #include "TopperPasses.hpp"
 
@@ -47,9 +48,16 @@ namespace TerrainPasses {
 			return;
 		}
 
+		if (uiTags & StencilTags::TOPPER_BIT) {
+			PassLog::BeginPass(apRenderPass, auiPassType, PassLog::STAGE_OPAQUE);
+		}
+
 		DrawPass(apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4);
-		if (uiTags)
+		PassLog::EndPass();
+
+		if (uiTags) {
 			StencilTags::EndPass();
+		}
 	}
 
 	// Draws a render pass with the per-pass draw function of the batch renderer, past the hook.

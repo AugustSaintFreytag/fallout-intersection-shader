@@ -100,6 +100,7 @@ namespace Settings {
 		fStaticBlendRange = std::max(GetFloat("StaticBlend", "fStaticBlendRange", fStaticBlendRange), 0.0f);
 		fStaticContactShadowFactor = std::clamp(GetFloat("StaticBlend", "fStaticContactShadowFactor", fStaticContactShadowFactor), 0.0f, 1.0f);
 		eDebugMode = static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
+		bLogTopperPasses = GetUInt("Debug", "bLogTopperPasses", bLogTopperPasses) != 0;
 
 		_MESSAGE("Settings: Unrolled mapping %u, blend range %.1f, climb height %.1f, edge softness %.2f, edge feature strength %.2f, edge feature size %.1f, contact shadow %.2f over %.2f, static blend range %.1f, static contact shadow factor %.2f, debug mode %u",
 			bUnrolledMapping, fBlendRange, fBlendClimbHeight, fEdgeSoftness, fEdgeFeatureStrength, fEdgeFeatureSize, fContactShadow, fContactShadowWidth, fStaticBlendRange, fStaticContactShadowFactor, eDebugMode);

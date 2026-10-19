@@ -4,6 +4,7 @@
 #include "Dependencies.hpp"
 #include "Hotkeys.hpp"
 #include "OverlayPass.hpp"
+#include "PassLog.hpp"
 #include "RenderStates.hpp"
 #include "Settings.hpp"
 #include "StencilTags.hpp"
@@ -32,6 +33,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* apMessage) {
 			// Runs before the frame is rendered. Drops passes of a frame that got no depth callback.
 			OverlayPass::OnMainLoop();
 			Hotkeys::Poll();
+			PassLog::OnMainLoop();
 			TerrainPasses::Clear();
 			TopperPasses::Clear();
 			break;
