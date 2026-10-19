@@ -1,6 +1,7 @@
 #include "DrawRedirect.hpp"
 
 #include "Dependencies.hpp"
+#include "PassLog.hpp"
 #include "StencilTags.hpp"
 
 #include "Gamebryo/NiD3DVertexShader.hpp"
@@ -12,6 +13,7 @@
 // Changes the indexed draws of replayed landscape passes on the device: the pixel shader, and for the overlay the mesh.
 // Outside the replays, it keeps draws without depth writes from changing the stencil tags (`StencilTags::KeepsTags`).
 // In the feature replay of toppers, it draws each object mesh with the topper feature shader (`DrawWithFeatureShader`).
+// While a deferred topper pass is set up in the opaque stage, it skips the draws of the pass.
 //
 // The overlay shades every tagged pixel with the landscape block its ground point lies in, using that block's
 // textures and constants. The replayed pass of the block binds all of them. Its mesh and pixel shader do not fit.
@@ -59,13 +61,54 @@ namespace DrawRedirect {
 	// Sampler Layout of Object Pixel Shaders
 	// The feature shader reads the base map at s0 and the height map at s3. Sampler stages keep the textures of earlier
 	// draws, so the device cannot tell whether a pass binds a height map. The pass's pixel shader declares it.
+	// Object shaders place the height map by variant. Parallax Shaders – Objects has it at s3 in `PAR2009.pso` and
+	// `PAR2029.pso` (1 and 2 lights) and at s2 in `PAR2017.pso` (3 lights, attenuation map at s4).
 	static constexpr uint32_t BASE_MAP_STAGE = 0;
 	static constexpr uint32_t HEIGHT_MAP_STAGE = 3;
 	static constexpr uint32_t FEATURE_CONSTANT_REGISTER = 0; // c0, `FeatureParams` of "Shaders/Toppers/TopperFeatures.hlsl"
+	static constexpr int32_t NO_STAGE = -1;
 
 	struct SamplerLayout {
-		bool bBaseMap; // `BaseMap` at s0
-		bool bHeightMap; // `HeightMap` at s3
+		int32_t iBaseMap; // Stage of `BaseMap`, or `NO_STAGE`
+		int32_t iHeightMap; // Stage of `HeightMap`, or `NO_STAGE`
+	};
+
+	// Sampler states that go with a texture bound to the stage the feature shader reads.
+	static constexpr D3DSAMPLERSTATETYPE kCopiedSamplerStates[] = {
+		D3DSAMP_ADDRESSU, D3DSAMP_ADDRESSV, D3DSAMP_MAGFILTER, D3DSAMP_MINFILTER, D3DSAMP_MIPFILTER, D3DSAMP_MIPMAPLODBIAS,
+		D3DSAMP_MAXMIPLEVEL, D3DSAMP_MAXANISOTROPY, D3DSAMP_SRGBTEXTURE,
+	};
+
+	// The texture and sampler states of a texture stage on the device. Holds a reference to the texture.
+	struct StageContent {
+		IDirect3DBaseTexture9* pTexture = nullptr;
+		DWORD uiStates[ARRAYSIZE(kCopiedSamplerStates)] = {};
+
+		StageContent() = default;
+		StageContent(const StageContent&) = delete;
+		StageContent& operator=(const StageContent&) = delete;
+
+		~StageContent() {
+			if (pTexture) {
+				pTexture->Release();
+			}
+		}
+
+		void Read(IDirect3DDevice9* apDevice, uint32_t auiStage) {
+			apDevice->GetTexture(auiStage, &pTexture);
+
+			for (uint32_t i = 0; i < ARRAYSIZE(kCopiedSamplerStates); i++) {
+				apDevice->GetSamplerState(auiStage, kCopiedSamplerStates[i], &uiStates[i]);
+			}
+		}
+
+		void Write(IDirect3DDevice9* apDevice, uint32_t auiStage) const {
+			apDevice->SetTexture(auiStage, pTexture);
+
+			for (uint32_t i = 0; i < ARRAYSIZE(kCopiedSamplerStates); i++) {
+				apDevice->SetSamplerState(auiStage, kCopiedSamplerStates[i], uiStates[i]);
+			}
+		}
 	};
 
 	static std::unordered_map<const IDirect3DPixelShader9*, SamplerLayout> kSamplerLayouts;
@@ -89,10 +132,16 @@ namespace DrawRedirect {
 		return hResult;
 	}
 
-	// Returns whether the constant table of the given pixel shader declares a sampler by name at the given stage.
-	static bool HasSampler(ID3DXConstantTable* apTable, const char* apName, uint32_t auiStage) {
+	// Returns the stage of a sampler that the constant table of a pixel shader declares by name.
+	// Returns `NO_STAGE` if the shader declares no such sampler.
+	static int32_t GetSamplerStage(ID3DXConstantTable* apTable, const char* apName) {
 		const D3DXHANDLE hConstant = apTable->GetConstantByName(nullptr, apName);
-		return hConstant && apTable->GetSamplerIndex(hConstant) == auiStage;
+
+		if (!hConstant) {
+			return NO_STAGE;
+		}
+
+		return static_cast<int32_t>(apTable->GetSamplerIndex(hConstant));
 	}
 
 	// Returns where the given object pixel shader reads its base map and height map, from its constant table.
@@ -102,15 +151,15 @@ namespace DrawRedirect {
 		if (it != kSamplerLayouts.end())
 			return it->second;
 
-		SamplerLayout kLayout = {};
+		SamplerLayout kLayout = { NO_STAGE, NO_STAGE };
 		UINT uiSize = 0;
 		if (apShader && SUCCEEDED(apShader->GetFunction(nullptr, &uiSize)) && uiSize) {
 			std::vector<uint8_t> kFunction(uiSize);
 			ID3DXConstantTable* pTable = nullptr;
 			if (SUCCEEDED(apShader->GetFunction(kFunction.data(), &uiSize))
 				&& SUCCEEDED(D3DXGetShaderConstantTable(reinterpret_cast<const DWORD*>(kFunction.data()), &pTable))) {
-				kLayout.bBaseMap = HasSampler(pTable, "BaseMap", BASE_MAP_STAGE);
-				kLayout.bHeightMap = HasSampler(pTable, "HeightMap", HEIGHT_MAP_STAGE);
+				kLayout.iBaseMap = GetSamplerStage(pTable, "BaseMap");
+				kLayout.iHeightMap = GetSamplerStage(pTable, "HeightMap");
 				pTable->Release();
 			}
 		}
@@ -119,31 +168,75 @@ namespace DrawRedirect {
 	}
 
 	// Draws the given mesh with the topper feature shader, telling it whether the pass binds a height map.
-	// Skips draws whose pixel shader reads no base map at s0. The features there stay neutral.
+	// Moves the base map and height map to the stages the feature shader reads for the draw.
+	// Skips draws whose pixel shader reads no base map. The features there stay neutral.
 	static HRESULT DrawWithFeatureShader(IDirect3DDevice9* apDevice, D3DPRIMITIVETYPE aeType, INT aiBaseVertexIndex, UINT auiMinVertexIndex, UINT auiNumVertices, UINT auiStartIndex, UINT auiPrimitiveCount) {
 		IDirect3DPixelShader9* pSavedPixelShader = nullptr;
 		apDevice->GetPixelShader(&pSavedPixelShader);
 		const SamplerLayout kLayout = GetSamplerLayout(pSavedPixelShader);
-		if (!kLayout.bBaseMap) {
+		if (kLayout.iBaseMap == NO_STAGE) {
 			SafeRelease(pSavedPixelShader);
 			return D3D_OK;
 		}
 
+		const bool bHeightMap = kLayout.iHeightMap != NO_STAGE;
+
+		// Both maps are read before either is bound. A map can sit on the stage the other one moves to.
+		StageContent kBaseMap;
+		StageContent kHeightMap;
+		kBaseMap.Read(apDevice, kLayout.iBaseMap);
+
+		if (bHeightMap) {
+			kHeightMap.Read(apDevice, kLayout.iHeightMap);
+		}
+
+		StageContent kSavedBase;
+		StageContent kSavedHeight;
+		kSavedBase.Read(apDevice, BASE_MAP_STAGE);
+		kSavedHeight.Read(apDevice, HEIGHT_MAP_STAGE);
+
+		kBaseMap.Write(apDevice, BASE_MAP_STAGE);
+
+		if (bHeightMap) {
+			kHeightMap.Write(apDevice, HEIGHT_MAP_STAGE);
+		}
+
+		float fHeightMapFlag = 0.0f;
+
+		if (bHeightMap) {
+			fHeightMapFlag = 1.0f;
+		}
+
 		float fSavedConstant[4];
 		apDevice->GetPixelShaderConstantF(FEATURE_CONSTANT_REGISTER, fSavedConstant, 1);
-		const float fFeatureParams[4] = { kLayout.bHeightMap ? 1.0f : 0.0f, 0.0f, 0.0f, 0.0f };
+
+		const float fFeatureParams[4] = { fHeightMapFlag, 0.0f, 0.0f, 0.0f };
 		apDevice->SetPixelShaderConstantF(FEATURE_CONSTANT_REGISTER, fFeatureParams, 1);
 		apDevice->SetPixelShader(pPassShader);
+
 		const HRESULT hResult = pOriginal(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
+
 		apDevice->SetPixelShader(pSavedPixelShader);
 		apDevice->SetPixelShaderConstantF(FEATURE_CONSTANT_REGISTER, fSavedConstant, 1);
+		kSavedBase.Write(apDevice, BASE_MAP_STAGE);
+		kSavedHeight.Write(apDevice, HEIGHT_MAP_STAGE);
 		SafeRelease(pSavedPixelShader);
+
 		return hResult;
 	}
 
 	// Draws according to the mode: unchanged, with the pixel shader of the current pass, or as the full-screen triangle
 	// in place of the first indexed draw of a pass. Full-screen mode skips the other draws of the pass.
 	static HRESULT STDMETHODCALLTYPE DrawIndexedPrimitiveHook(IDirect3DDevice9* apDevice, D3DPRIMITIVETYPE aeType, INT aiBaseVertexIndex, UINT auiMinVertexIndex, UINT auiNumVertices, UINT auiStartIndex, UINT auiPrimitiveCount) {
+		if (PassLog::IsCapturing()) {
+			PassLog::OnDraw(apDevice);
+		}
+
+		if (eMode == MODE_SKIP) {
+			uiSkipped++;
+			return D3D_OK;
+		}
+
 		if (eMode == MODE_OFF) {
 			if (!StencilTags::KeepsTags())
 				return pOriginal(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);

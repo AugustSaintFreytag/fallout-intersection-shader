@@ -18,6 +18,7 @@ namespace DrawRedirect {
 		MODE_FULL_SCREEN = 1, // One full-screen triangle per pass with the pass's pixel shader, for the overlay
 		MODE_SHADER = 2, // Every draw keeps its mesh and uses the pass's pixel shader, for the height field
 		MODE_TOPPER_FEATURES = 3, // Like shader mode, for the feature replay of toppers. Passes on the height map flag.
+		MODE_SKIP = 4, // Every draw is skipped and counted as skipped, for the setup of deferred topper passes
 	};
 
 	void SetMode(Mode aeMode);
