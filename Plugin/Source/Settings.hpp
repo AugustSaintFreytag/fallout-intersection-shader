@@ -40,6 +40,7 @@ namespace Settings {
 	inline DebugMode eDebugMode = DEBUG_NONE;
 	inline bool bProfile = false; // Logs the GPU time of each stage every few seconds.
 	inline bool bDeferToppers = true; // Off: toppers draw in the opaque stage.
+	inline bool bLogTopperPasses = false; // The reload key also logs the draws of topper passes for one frame.
 
 	void Load();
 	void LoadLive();

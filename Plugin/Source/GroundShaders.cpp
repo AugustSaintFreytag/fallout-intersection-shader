@@ -45,13 +45,18 @@ namespace GroundShaders {
 
 	static bool ReadFile(const char* apPath, std::vector<char>& arData) {
 		FILE* pFile = nullptr;
-		if (fopen_s(&pFile, apPath, "rb") || !pFile)
+
+		if (fopen_s(&pFile, apPath, "rb") || !pFile) {
 			return false;
+		}
 
 		char cBuffer[4096];
 		size_t uiRead;
-		while ((uiRead = fread(cBuffer, 1, sizeof(cBuffer), pFile)) > 0)
+
+		while ((uiRead = fread(cBuffer, 1, sizeof(cBuffer), pFile)) > 0) {
 			arData.insert(arData.end(), cBuffer, cBuffer + uiRead);
+		}
+
 		fclose(pFile);
 		return true;
 	}
@@ -69,8 +74,11 @@ namespace GroundShaders {
 		for (size_t i = 1; i < uiTokenCount;) {
 			const uint32_t uiToken = pTokens[i];
 			const uint32_t uiOpcode = uiToken & D3DSI_OPCODE_MASK;
-			if (uiToken == D3DSIO_END)
+
+			if (uiToken == D3DSIO_END) {
 				break;
+			}
+
 			if (uiOpcode == D3DSIO_COMMENT) {
 				i += 1 + ((uiToken & D3DSI_COMMENTSIZE_MASK) >> D3DSI_COMMENTSIZE_SHIFT);
 				continue;
@@ -78,12 +86,15 @@ namespace GroundShaders {
 
 			// Destination register, then 4 floats.
 			const uint32_t uiLength = (uiToken & D3DSI_INSTLENGTH_MASK) >> D3DSI_INSTLENGTH_SHIFT;
+
 			if (uiOpcode == D3DSIO_DEF && uiLength == 5 && i + 5 < uiTokenCount) {
 				for (uint32_t uiComponent = 0; uiComponent < 4; uiComponent++) {
 					float fValue;
 					memcpy(&fValue, &pTokens[i + 2 + uiComponent], sizeof(fValue));
-					if (fValue == afValue)
+
+					if (fValue == afValue) {
 						return true;
+					}
 				}
 			}
 			i += 1 + uiLength;
@@ -99,15 +110,24 @@ namespace GroundShaders {
 	// Its code then holds 1 / 1024 as a literal.
 	static ShaderSet DetectSet() {
 		std::vector<char> kCode;
+
 		if (!ReadFile(INSTALLED_SHADER_PATH, kCode)) {
 			_MESSAGE("Terrain overlay disabled: '%s' not found. Vanilla Plus Terrain is required.", INSTALLED_SHADER_PATH);
 			return SET_NONE;
 		}
 
-		if (Contains(kCode, "SunColor"))
-			return HasLiteral(kCode, 1.0f / 1024.0f) ? SET_PARALLAX_OPTIMIZED : SET_PARALLAX;
-		if (!Contains(kCode, "PSLightColor"))
+		if (Contains(kCode, "SunColor")) {
+			if (HasLiteral(kCode, 1.0f / 1024.0f)) {
+				return SET_PARALLAX_OPTIMIZED;
+			}
+
+			return SET_PARALLAX;
+		}
+
+		if (!Contains(kCode, "PSLightColor")) {
 			_MESSAGE("Unknown terrain shaders in '%s', using the ground shaders for Vanilla Plus Terrain.", INSTALLED_SHADER_PATH);
+		}
+
 		return SET_VPT;
 	}
 
@@ -116,8 +136,10 @@ namespace GroundShaders {
 	// Call once the D3D device exists, at NVSE DeferredInit.
 	bool Load() {
 		const ShaderSet eSet = DetectSet();
-		if (eSet == SET_NONE)
+
+		if (eSet == SET_NONE) {
 			return false;
+		}
 
 		_MESSAGE("Terrain shaders: '%s'.", kSetNames[eSet]);
 
@@ -126,6 +148,7 @@ namespace GroundShaders {
 				char cPath[MAX_PATH];
 				sprintf_s(cPath, "IntersectionBlend\\Ground\\%s\\T%uL%u.pso", kSetFolders[eSet], uiTextures + 1, kPointLights[uiLights]);
 				NiD3DPixelShader* pShader = Dependencies::CreatePixelShader(cPath);
+
 				if (!pShader) {
 					_MESSAGE("Terrain overlay disabled: Failed to load the ground shader '%s'.", cPath);
 					return false;
@@ -136,6 +159,7 @@ namespace GroundShaders {
 		}
 
 		pFieldShader = Dependencies::CreatePixelShader("IntersectionBlend\\GroundField.pso");
+
 		if (!pFieldShader) {
 			_MESSAGE("Terrain overlay disabled: Failed to load the field shader.");
 			return false;
@@ -147,18 +171,28 @@ namespace GroundShaders {
 
 	// Returns the ground shader for a landscape pass type, or null for other pass types.
 	IDirect3DPixelShader9* GetOverlayShader(uint32_t auiPassType) {
-		if (auiPassType < TerrainPasses::FIRST_LANDSCAPE_PASS || auiPassType > TerrainPasses::LAST_LANDSCAPE_PASS)
+		if (auiPassType < TerrainPasses::FIRST_LANDSCAPE_PASS || auiPassType > TerrainPasses::LAST_LANDSCAPE_PASS) {
 			return nullptr;
+		}
 
 		const uint32_t uiIndex = auiPassType - TerrainPasses::FIRST_LANDSCAPE_PASS;
 		const uint32_t uiTextures = uiIndex / PASSES_PER_TEXTURE_COUNT;
 		const uint32_t uiLights = (uiIndex % PASSES_PER_TEXTURE_COUNT) / 2;
 		NiD3DPixelShader* pShader = pOverlayShaders[uiTextures * LIGHT_VARIANTS + uiLights];
-		return pShader ? pShader->GetShaderHandle() : nullptr;
+
+		if (!pShader) {
+			return nullptr;
+		}
+
+		return pShader->GetShaderHandle();
 	}
 
 	IDirect3DPixelShader9* GetFieldShader() {
-		return pFieldShader ? pFieldShader->GetShaderHandle() : nullptr;
+		if (!pFieldShader) {
+			return nullptr;
+		}
+
+		return pFieldShader->GetShaderHandle();
 	}
 
 }

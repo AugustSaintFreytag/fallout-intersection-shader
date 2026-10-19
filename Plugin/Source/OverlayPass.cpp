@@ -71,14 +71,18 @@ namespace OverlayPass {
 		TopperBlend::Initialize();
 		GroundBuffer::Initialize();
 		DrawRedirect::Initialize();
-		if (bShadersReady && !DrawRedirect::IsReady())
+
+		if (bShadersReady && !DrawRedirect::IsReady()) {
 			_MESSAGE("Terrain overlay disabled: draw redirect not available");
+		}
+
 		bOverlayReady = bShadersReady && DrawRedirect::IsReady();
 		StencilTags::SetEnabled(bOverlayReady || Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS);
 		Profiler::Initialize();
 
 		pDebugVS = Dependencies::CreateVertexShader("IntersectionBlend\\DebugDepth.vso");
 		pDebugPS = Dependencies::CreatePixelShader("IntersectionBlend\\DebugDepth.pso");
+
 		if (!pDebugVS || !pDebugPS) {
 			_MESSAGE("Failed to load debug shaders (VS %p, PS %p), debug views disabled", pDebugVS, pDebugPS);
 			return;
@@ -92,6 +96,7 @@ namespace OverlayPass {
 			{ 0, 12, D3DDECLTYPE_FLOAT2, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_TEXCOORD, 0 },
 			D3DDECL_END()
 		};
+
 		if (FAILED(NiDX9Renderer::GetSingleton()->GetD3DDevice()->CreateVertexDeclaration(kElements, &pFullscreenDecl))) {
 			_MESSAGE("Failed to create the fullscreen vertex declaration, debug views disabled");
 			return;
@@ -129,8 +134,10 @@ namespace OverlayPass {
 	// Returns whether any part of a landscape block's bound lies within the given view depth of the camera.
 	static bool IsBlockInRange(const NiGeometry* apGeometry, const NiPoint3& arEye, const NiPoint3& arViewDirection, float afMaxDepth) {
 		const NiBound* pBound = apGeometry->m_pWorldBound;
-		if (!pBound)
+
+		if (!pBound) {
 			return true;
+		}
 
 		const float fDepth = (pBound->m_kCenter.x - arEye.x) * arViewDirection.x + (pBound->m_kCenter.y - arEye.y) * arViewDirection.y
 			+ (pBound->m_kCenter.z - arEye.z) * arViewDirection.z;
@@ -159,40 +166,64 @@ namespace OverlayPass {
 	static const HeightRange& GetHeightRange(const NiGeometry* apGeometry) {
 		const NiGeometryData* pData = apGeometry->GetModelData();
 		const NiBound* pBound = apGeometry->m_pWorldBound;
-		const NiPoint3 kCenter = pBound ? pBound->m_kCenter : apGeometry->m_kWorld.m_Translate;
+		NiPoint3 kCenter = apGeometry->m_kWorld.m_Translate;
+		float fRadius = LANDSCAPE_BLOCK_SIZE;
+
+		if (pBound) {
+			kCenter = pBound->m_kCenter;
+			fRadius = pBound->m_fRadius;
+		}
 
 		const auto it = kHeightRanges.find(apGeometry);
-		if (it != kHeightRanges.end() && it->second.pData == pData && it->second.kCenter == kCenter)
-			return it->second;
 
-		if (kHeightRanges.size() >= MAX_HEIGHT_RANGES)
+		if (it != kHeightRanges.end() && it->second.pData == pData && it->second.kCenter == kCenter) {
+			return it->second;
+		}
+
+		if (kHeightRanges.size() >= MAX_HEIGHT_RANGES) {
 			kHeightRanges.clear();
+		}
 
 		HeightRange kRange = { pData, kCenter, 0.0f, 0.0f, false };
+
 		if (pData && pData->m_pkVertex && pData->m_usVertices) {
 			float fMin = FLT_MAX;
 			float fMax = -FLT_MAX;
+
 			for (uint32_t i = 0; i < pData->m_usVertices; i++) {
 				fMin = std::min(fMin, pData->m_pkVertex[i].z);
 				fMax = std::max(fMax, pData->m_pkVertex[i].z);
 			}
+
 			// Landscape blocks are only translated.
 			kRange.fMin = fMin + apGeometry->m_kWorld.m_Translate.z;
 			kRange.fMax = fMax + apGeometry->m_kWorld.m_Translate.z;
 			kRange.bFromVertices = true;
 		}
 		else {
-			const float fRadius = pBound ? pBound->m_fRadius : LANDSCAPE_BLOCK_SIZE;
 			kRange.fMin = kCenter.z - fRadius;
 			kRange.fMax = kCenter.z + fRadius;
 		}
 
 		static uint32_t uiLoggedRanges = 0;
+
 		if (uiLoggedRanges < 8) {
 			uiLoggedRanges++;
+
+			uint32_t uiVertices = 0;
+
+			if (pData) {
+				uiVertices = pData->m_usVertices;
+			}
+
+			const char* pSource = "bound";
+
+			if (kRange.bFromVertices) {
+				pSource = "vertices";
+			}
+
 			_MESSAGE("Block height range: Geometry %p, %u vertices, z %.0f to %.0f from %s (bound centre z %.0f, radius %.0f)",
-				apGeometry, pData ? pData->m_usVertices : 0, kRange.fMin, kRange.fMax, kRange.bFromVertices ? "vertices" : "bound",
-				kCenter.z, pBound ? pBound->m_fRadius : 0.0f);
+				apGeometry, uiVertices, kRange.fMin, kRange.fMax, pSource, kCenter.z, fRadius);
 		}
 
 		return kHeightRanges[apGeometry] = kRange;
@@ -207,8 +238,10 @@ namespace OverlayPass {
 	static RECT GetBlockScissor(const NiGeometry* apGeometry, const NiPoint3& arEye, const D3DXMATRIX& arViewProjection, float afNear, const D3DVIEWPORT9& arViewport, float afMargin) {
 		const RECT kFull = { static_cast<LONG>(arViewport.X), static_cast<LONG>(arViewport.Y), static_cast<LONG>(arViewport.X + arViewport.Width), static_cast<LONG>(arViewport.Y + arViewport.Height) };
 		const NiBound* pBound = apGeometry->m_pWorldBound;
-		if (!pBound)
+
+		if (!pBound) {
 			return kFull;
+		}
 
 		const float fCenterX = (std::floor(pBound->m_kCenter.x / LANDSCAPE_BLOCK_SIZE) + 0.5f) * LANDSCAPE_BLOCK_SIZE;
 		const float fCenterY = (std::floor(pBound->m_kCenter.y / LANDSCAPE_BLOCK_SIZE) + 0.5f) * LANDSCAPE_BLOCK_SIZE;
@@ -219,12 +252,25 @@ namespace OverlayPass {
 
 		// Corner i has the high x, y and z side for bits 1, 2 and 4.
 		D3DXVECTOR4 kCorners[8];
+
 		for (uint32_t i = 0; i < 8; i++) {
-			const D3DXVECTOR4 kPosition(
-				fCenterX + ((i & 1) ? fHalfSize : -fHalfSize) - arEye.x,
-				fCenterY + ((i & 2) ? fHalfSize : -fHalfSize) - arEye.y,
-				((i & 4) ? fTop : fBottom) - arEye.z,
-				1.0f);
+			float fOffsetX = -fHalfSize;
+			float fOffsetY = -fHalfSize;
+			float fZ = fBottom;
+
+			if (i & 1) {
+				fOffsetX = fHalfSize;
+			}
+
+			if (i & 2) {
+				fOffsetY = fHalfSize;
+			}
+
+			if (i & 4) {
+				fZ = fTop;
+			}
+
+			const D3DXVECTOR4 kPosition(fCenterX + fOffsetX - arEye.x, fCenterY + fOffsetY - arEye.y, fZ - arEye.z, 1.0f);
 			D3DXVec4Transform(&kCorners[i], &kPosition, &arViewProjection);
 		}
 
@@ -239,25 +285,32 @@ namespace OverlayPass {
 		};
 
 		bool bAny = false;
+
 		for (uint32_t i = 0; i < 8; i++) {
 			if (kCorners[i].w >= afNear) {
 				AddPoint(kCorners[i]);
 				bAny = true;
 			}
 			for (uint32_t uiBit = 1; uiBit < 8; uiBit <<= 1) {
-				if (i & uiBit)
+				if (i & uiBit) {
 					continue;
+				}
+
 				const D3DXVECTOR4& kA = kCorners[i];
 				const D3DXVECTOR4& kB = kCorners[i | uiBit];
-				if ((kA.w >= afNear) == (kB.w >= afNear))
+
+				if ((kA.w >= afNear) == (kB.w >= afNear)) {
 					continue;
+				}
+
 				const float fT = (afNear - kA.w) / (kB.w - kA.w);
 				AddPoint(kA + (kB - kA) * fT);
 				bAny = true;
 			}
 		}
-		if (!bAny)
+		if (!bAny) {
 			return { kFull.left, kFull.top, kFull.left, kFull.top };
+		}
 
 		// Clip y points up, window rows go down. One pixel of slack on each side.
 		const auto ToColumn = [&](float afX) { return arViewport.X + (afX * 0.5f + 0.5f) * arViewport.Width; };
@@ -318,9 +371,11 @@ namespace OverlayPass {
 		IDirect3DBaseTexture9* const pGroundTextures[GROUND_SAMPLER_COUNT] = { apGroundTexture, apPointTexture };
 		DWORD uiSavedSamplerValues[GROUND_SAMPLER_COUNT][ARRAYSIZE(eSamplerStates)];
 		IDirect3DBaseTexture9* pSavedTextures[GROUND_SAMPLER_COUNT] = {};
+
 		for (uint32_t uiSampler = 0; uiSampler < GROUND_SAMPLER_COUNT; uiSampler++) {
 			const uint32_t uiStage = GROUND_BUFFER_SAMPLER + uiSampler;
 			apDevice->GetTexture(uiStage, &pSavedTextures[uiSampler]);
+
 			for (uint32_t i = 0; i < ARRAYSIZE(eSamplerStates); i++) {
 				apDevice->GetSamplerState(uiStage, eSamplerStates[i], &uiSavedSamplerValues[uiSampler][i]);
 				apDevice->SetSamplerState(uiStage, eSamplerStates[i], uiSamplerValues[i]);
@@ -383,14 +438,16 @@ namespace OverlayPass {
 
 				const NiBound* pBound = apGeometry->m_pWorldBound;
 				const NiPoint3& kTranslate = apGeometry->m_kWorld.m_Translate;
-				const float fBlock[2][4] = {
-					{
-						pBound ? std::floor(pBound->m_kCenter.x / LANDSCAPE_BLOCK_SIZE) : 0.0f,
-						pBound ? std::floor(pBound->m_kCenter.y / LANDSCAPE_BLOCK_SIZE) : 0.0f,
-						0.0f, 0.0f,
-					},
+				float fBlock[2][4] = {
+					{ 0.0f, 0.0f, 0.0f, 0.0f },
 					{ kEye.x - kTranslate.x, kEye.y - kTranslate.y, kEye.z - kTranslate.z, 0.0f },
 				};
+
+				if (pBound) {
+					fBlock[0][0] = std::floor(pBound->m_kCenter.x / LANDSCAPE_BLOCK_SIZE);
+					fBlock[0][1] = std::floor(pBound->m_kCenter.y / LANDSCAPE_BLOCK_SIZE);
+				}
+
 				apDevice->SetPixelShaderConstantF(BLOCK_CONSTANT_REGISTER, fBlock[0], 2);
 			});
 			DrawRedirect::SetMode(DrawRedirect::MODE_OFF);
@@ -400,6 +457,7 @@ namespace OverlayPass {
 			Profiler::RecordReplay(uiPasses, kCounts.uiDrawn, kCounts.uiSkipped, kCounts.uiForeign, dScissoredScreens, dReplayMilliseconds);
 
 			static uint32_t uiLoggedReplays = 0;
+
 			if (uiLoggedReplays < 3) {
 				uiLoggedReplays++;
 				_MESSAGE("Overlay: %u landscape passes replayed, %u triangles drawn, %u draws skipped, %u of them with another vertex buffer",
@@ -410,10 +468,14 @@ namespace OverlayPass {
 		for (uint32_t uiSampler = 0; uiSampler < GROUND_SAMPLER_COUNT; uiSampler++) {
 			const uint32_t uiStage = GROUND_BUFFER_SAMPLER + uiSampler;
 			apDevice->SetTexture(uiStage, pSavedTextures[uiSampler]);
-			if (pSavedTextures[uiSampler])
+
+			if (pSavedTextures[uiSampler]) {
 				pSavedTextures[uiSampler]->Release();
-			for (uint32_t i = 0; i < ARRAYSIZE(eSamplerStates); i++)
+			}
+
+			for (uint32_t i = 0; i < ARRAYSIZE(eSamplerStates); i++) {
 				apDevice->SetSamplerState(uiStage, eSamplerStates[i], uiSavedSamplerValues[uiSampler][i]);
+			}
 		}
 
 		return uiPasses;
@@ -424,8 +486,10 @@ namespace OverlayPass {
 	static void DrawDebugView(IDirect3DDevice9* apDevice, const NiCamera* apCamera, IDirect3DBaseTexture9* apTexture) {
 		// Capture all device state and restore it afterwards. The game's render state cache then stays valid.
 		IDirect3DStateBlock9* pStateBlock = nullptr;
-		if (FAILED(apDevice->CreateStateBlock(D3DSBT_ALL, &pStateBlock)))
+
+		if (FAILED(apDevice->CreateStateBlock(D3DSBT_ALL, &pStateBlock))) {
 			return;
+		}
 
 		D3DVIEWPORT9 kViewport;
 		apDevice->GetViewport(&kViewport);
@@ -441,8 +505,14 @@ namespace OverlayPass {
 
 		apDevice->SetRenderState(D3DRS_ZENABLE, D3DZB_FALSE);
 		apDevice->SetRenderState(D3DRS_ZWRITEENABLE, FALSE);
+
 		if (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS || IsAttributeView()) {
-			const uint32_t uiBit = Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS ? StencilTags::TOPPER_BIT : StencilTags::TERRAIN_BLEND_BIT;
+			uint32_t uiBit = StencilTags::TERRAIN_BLEND_BIT;
+
+			if (Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS) {
+				uiBit = StencilTags::TOPPER_BIT;
+			}
+
 			apDevice->SetRenderState(D3DRS_STENCILENABLE, TRUE);
 			apDevice->SetRenderState(D3DRS_TWOSIDEDSTENCILMODE, FALSE);
 			apDevice->SetRenderState(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
@@ -500,8 +570,10 @@ namespace OverlayPass {
 		uiLoop++;
 		const uint32_t uiCallbacks = std::exchange(uiFrameCallbacks, 0);
 		const uint32_t uiTaggedStages = StencilTags::ConsumeTaggedStageCount();
-		if (uiLogLines >= MAX_LOG_LINES || uiLoop == 1)
+
+		if (uiLogLines >= MAX_LOG_LINES || uiLoop == 1) {
 			return;
+		}
 
 		if (uiCallbacks == 0 && bRendering) {
 			_MESSAGE("Loop %u: No post-resolve callback this frame (%u tagged stages), world rendering paused?", uiLoop, uiTaggedStages);
@@ -528,7 +600,12 @@ namespace OverlayPass {
 		Profiler::BeginFrame(pDevice);
 
 		// Toppers left out of the opaque stage are drawn in any case.
-		const uint32_t uiTopperPasses = apAccumulator && apTarget ? TopperPasses::Replay(apAccumulator, apTarget, apDepthTexture) : 0;
+		uint32_t uiTopperPasses = 0;
+
+		if (apAccumulator && apTarget) {
+			uiTopperPasses = TopperPasses::Replay(apAccumulator, apTarget, apDepthTexture);
+		}
+
 		TopperPasses::Clear();
 		Profiler::EndStage(Profiler::STAGE_TOPPERS);
 		const double dTopperMilliseconds = GetMillisecondsSince(kCallbackStart);
@@ -555,25 +632,34 @@ namespace OverlayPass {
 		const bool bAttributeView = IsAttributeView();
 
 		IDirect3DTexture9* pGroundTexture = nullptr;
-		if (bOverlay || bHeightView)
+
+		if (bOverlay || bHeightView) {
 			pGroundTexture = GroundBuffer::Render(pDevice, apAccumulator->m_pkCamera, apTarget, apDepthTexture, bHeightView);
+		}
 
 		// Draw before the overlay. The overlay clears the tags it draws over.
-		if (bDebugReady && (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS) && bTagged)
+		if (bDebugReady && (Settings::eDebugMode == Settings::DEBUG_STENCIL_TAGS || Settings::eDebugMode == Settings::DEBUG_TOPPER_TAGS) && bTagged) {
 			DrawDebugView(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
-		else if (bDebugReady && bAttributeView && bTagged && pGroundTexture)
+		}
+		else if (bDebugReady && bAttributeView && bTagged && pGroundTexture) {
 			DrawDebugView(pDevice, apAccumulator->m_pkCamera, GroundBuffer::GetPointTexture());
+		}
 
 		uint32_t uiPasses = 0;
-		if (bOverlay && pGroundTexture && !bAttributeView && !bHeightView)
+
+		if (bOverlay && pGroundTexture && !bAttributeView && !bHeightView) {
 			uiPasses = RenderTerrainOverlay(pDevice, apAccumulator->m_pkCamera, apTarget, pGroundTexture, GroundBuffer::GetPointTexture(), kViewProjection);
+		}
+
 		Profiler::EndStage(Profiler::STAGE_OVERLAY);
 		TerrainPasses::Clear();
 
-		if (bDebugReady && Settings::eDebugMode == Settings::DEBUG_DEPTH_BANDS)
+		if (bDebugReady && Settings::eDebugMode == Settings::DEBUG_DEPTH_BANDS) {
 			DrawDebugView(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
-		else if (bDebugReady && bHeightView && pGroundTexture)
+		}
+		else if (bDebugReady && bHeightView && pGroundTexture) {
 			DrawDebugView(pDevice, apAccumulator->m_pkCamera, pGroundTexture);
+		}
 
 		StencilTags::Clear(pDevice);
 		const StencilTags::GeometryCounts kTagCounts = StencilTags::ConsumeGeometryCounts();

@@ -99,8 +99,10 @@ namespace TopperBlend {
 	}
 
 	static bool __cdecl OnDeviceReset(bool abBeforeReset, void*) {
-		if (abBeforeReset)
+		if (abBeforeReset) {
 			ReleaseResources();
+		}
+
 		return true;
 	}
 
@@ -111,10 +113,14 @@ namespace TopperBlend {
 		pCopyShader = Dependencies::CreatePixelShader("IntersectionBlend\\TopperCopy.pso");
 		pCompositeShader = Dependencies::CreatePixelShader("IntersectionBlend\\TopperComposite.pso");
 		pFeatureShader = Dependencies::CreatePixelShader("IntersectionBlend\\TopperFeatures.pso");
-		if (pFeatureShader)
+
+		if (pFeatureShader) {
 			pFeatureShader->IncRefCount();
-		else
+		}
+		else {
 			_MESSAGE("Failed to load the topper feature shader, the topper blend has no texture features");
+		}
+
 		if (!pVertexShader || !pCopyShader || !pCompositeShader) {
 			_MESSAGE("Failed to load the topper blend shaders (VS %p, copy %p, composite %p), toppers do not blend", pVertexShader, pCopyShader, pCompositeShader);
 			return;
@@ -129,6 +135,7 @@ namespace TopperBlend {
 			{ 0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
 			D3DDECL_END()
 		};
+
 		if (FAILED(pRenderer->GetD3DDevice()->CreateVertexDeclaration(kElements, &pDeclaration))) {
 			_MESSAGE("Failed to create the topper blend vertex declaration, toppers do not blend");
 			return;
@@ -143,11 +150,15 @@ namespace TopperBlend {
 	static bool CreateResources(IDirect3DDevice9* apDevice, IDirect3DBaseTexture9* apDepthTexture, IDirect3DSurface9* apSceneTarget) {
 		D3DSURFACE_DESC kDepthDesc;
 		D3DSURFACE_DESC kSceneDesc;
+
 		if (apDepthTexture->GetType() != D3DRTYPE_TEXTURE || FAILED(static_cast<IDirect3DTexture9*>(apDepthTexture)->GetLevelDesc(0, &kDepthDesc))
-			|| FAILED(apSceneTarget->GetDesc(&kSceneDesc)))
+			|| FAILED(apSceneTarget->GetDesc(&kSceneDesc))) {
 			return false;
-		if (pBaseDepthSurface && uiWidth == kDepthDesc.Width && uiHeight == kDepthDesc.Height && eColorFormat == kSceneDesc.Format)
+		}
+
+		if (pBaseDepthSurface && uiWidth == kDepthDesc.Width && uiHeight == kDepthDesc.Height && eColorFormat == kSceneDesc.Format) {
 			return true;
+		}
 
 		SafeRelease(pBaseDepthSurface);
 		SafeRelease(pBaseDepthTexture);
@@ -203,14 +214,16 @@ namespace TopperBlend {
 	// topper blend is unavailable.
 	// Call before the depth replay of the toppers, while neither holds them.
 	bool CopyBase(IDirect3DDevice9* apDevice, IDirect3DBaseTexture9* apDepthTexture) {
-		if (!bReady || !Hotkeys::IsBlendActive() || !apDepthTexture || Settings::fStaticBlendRange <= 0.0f)
+		if (!bReady || !Hotkeys::IsBlendActive() || !apDepthTexture || Settings::fStaticBlendRange <= 0.0f) {
 			return false;
+		}
 
 		IDirect3DSurface9* pSavedTarget = nullptr;
 		IDirect3DSurface9* pSavedDepth = nullptr;
 		apDevice->GetRenderTarget(0, &pSavedTarget);
 		apDevice->GetDepthStencilSurface(&pSavedDepth);
 		const bool bCreated = pSavedTarget && CreateResources(apDevice, apDepthTexture, pSavedTarget);
+
 		if (bCreated) {
 			// Resolves the scene target if it is multisampled.
 			apDevice->StretchRect(pSavedTarget, nullptr, pBaseColorSurface, nullptr, D3DTEXF_NONE);
@@ -267,12 +280,17 @@ namespace TopperBlend {
 	// if missing or different. Returns false if creation fails.
 	static bool CreateFeatureResources(IDirect3DDevice9* apDevice, IDirect3DSurface9* apDepthStencil) {
 		D3DSURFACE_DESC kDesc;
-		if (!apDepthStencil || FAILED(apDepthStencil->GetDesc(&kDesc)))
+
+		if (!apDepthStencil || FAILED(apDepthStencil->GetDesc(&kDesc))) {
 			return false;
-		if (pFeatureTarget && eFeatureMultisample == kDesc.MultiSampleType)
+		}
+
+		if (pFeatureTarget && eFeatureMultisample == kDesc.MultiSampleType) {
 			return true;
+		}
 
 		ReleaseFeatureResources();
+
 		if (FAILED(apDevice->CreateRenderTarget(uiWidth, uiHeight, D3DFMT_A8R8G8B8, kDesc.MultiSampleType, kDesc.MultiSampleQuality, FALSE, &pFeatureTarget, nullptr))
 			|| FAILED(apDevice->CreateTexture(uiWidth, uiHeight, 1, D3DUSAGE_RENDERTARGET, D3DFMT_A8R8G8B8, D3DPOOL_DEFAULT, &pFeatureTexture, nullptr))
 			|| FAILED(pFeatureTexture->GetSurfaceLevel(0, &pFeatureSurface))) {
@@ -291,15 +309,19 @@ namespace TopperBlend {
 	// Call after `CopyBase` and the colour replay, with the scene's depth-stencil surface bound.
 	IDirect3DPixelShader9* BeginFeatures(IDirect3DDevice9* apDevice) {
 		bFeaturesReady = false;
-		if (!pFeatureShader || !pBaseDepthTexture)
+
+		if (!pFeatureShader || !pBaseDepthTexture) {
 			return nullptr;
+		}
 
 		IDirect3DSurface9* pDepthStencil = nullptr;
 		apDevice->GetDepthStencilSurface(&pDepthStencil);
 		const bool bCreated = CreateFeatureResources(apDevice, pDepthStencil);
 		SafeRelease(pDepthStencil);
-		if (!bCreated)
+
+		if (!bCreated) {
 			return nullptr;
+		}
 
 		apDevice->GetRenderTarget(0, &pFeatureSavedTarget);
 		apDevice->GetViewport(&kFeatureSavedViewport);
@@ -316,8 +338,9 @@ namespace TopperBlend {
 
 	// Binds the scene target again and resolves the features into the feature texture.
 	void EndFeatures(IDirect3DDevice9* apDevice) {
-		if (!pFeatureSavedTarget)
+		if (!pFeatureSavedTarget) {
 			return;
+		}
 
 		// Setting a render target resets the viewport.
 		apDevice->SetRenderTarget(0, pFeatureSavedTarget);
@@ -330,8 +353,9 @@ namespace TopperBlend {
 	// The given scene depth must hold the toppers.
 	// Call after the colour replay of the toppers, after `CopyBase` and `MarkBases`.
 	void Composite(IDirect3DDevice9* apDevice, const NiCamera* apCamera, IDirect3DBaseTexture9* apDepthTexture) {
-		if (!pBaseDepthTexture || !apCamera || !apDepthTexture)
+		if (!pBaseDepthTexture || !apCamera || !apDepthTexture) {
 			return;
+		}
 
 		pStateBlock->Capture();
 
@@ -341,7 +365,25 @@ namespace TopperBlend {
 		const D3DXMATRIX& rProjection = *pRenderer->GetD3DProj();
 		const NiFrustum& kFrustum = apCamera->m_kViewFrustum;
 		const NiPoint3& kEye = apCamera->m_kWorld.m_Translate;
-		const bool bDebugView = Settings::eDebugMode == Settings::DEBUG_TOPPER_BLEND || Settings::eDebugMode == Settings::DEBUG_TOPPER_BLEND_CAUSE;
+		// Debug mode 9 or 10 for the composite, else 0.
+		float fDebugMode = 0.0f;
+
+		if (Settings::eDebugMode == Settings::DEBUG_TOPPER_BLEND || Settings::eDebugMode == Settings::DEBUG_TOPPER_BLEND_CAUSE) {
+			fDebugMode = static_cast<float>(Settings::eDebugMode);
+		}
+
+		float fFeatureStrength = 0.0f;
+
+		if (bFeaturesReady) {
+			fFeatureStrength = Settings::fEdgeFeatureStrength;
+		}
+
+		float fFeatureView = 0.0f;
+
+		if (Settings::eDebugMode == Settings::DEBUG_EDGE_FEATURES) {
+			fFeatureView = 1.0f;
+		}
+
 		const float fConstants[9][4] = {
 			{ kFrustum.m_fNear, kFrustum.m_fFar - kFrustum.m_fNear, kFrustum.m_fNear * kFrustum.m_fFar, 0.0f },
 			{ rProjection._11, rProjection._22, rProjection._31, rProjection._32 },
@@ -350,9 +392,10 @@ namespace TopperBlend {
 			{ rView._13, rView._23, rView._33, 0.0f },
 			{ 1.0f / uiWidth, 1.0f / uiHeight, 0.0f, 0.0f },
 			{ kEye.x, kEye.y, kEye.z, 0.0f },
-			{ Settings::fStaticBlendRange, Settings::fEdgeSoftness, bDebugView ? static_cast<float>(Settings::eDebugMode) : 0.0f, Settings::fContactShadow * Settings::fStaticContactShadowFactor },
-			{ Settings::fContactShadowWidth, bFeaturesReady ? Settings::fEdgeFeatureStrength : 0.0f, Settings::eDebugMode == Settings::DEBUG_EDGE_FEATURES ? 1.0f : 0.0f, 0.0f },
+			{ Settings::fStaticBlendRange, Settings::fEdgeSoftness, fDebugMode, Settings::fContactShadow * Settings::fStaticContactShadowFactor },
+			{ Settings::fContactShadowWidth, fFeatureStrength, fFeatureView, 0.0f },
 		};
+
 		apDevice->SetPixelShaderConstantF(0, fConstants[0], 9);
 
 		// Only topper pixels in front of a tagged base. Set on the device directly, past LOD Flicker Fix.
@@ -376,7 +419,13 @@ namespace TopperBlend {
 		BindTexture(apDevice, 0, apDepthTexture);
 		BindTexture(apDevice, 1, pBaseDepthTexture);
 		BindTexture(apDevice, 2, pBaseColorTexture);
-		BindTexture(apDevice, 3, bFeaturesReady ? pFeatureTexture : nullptr);
+		IDirect3DTexture9* pFeatures = nullptr;
+
+		if (bFeaturesReady) {
+			pFeatures = pFeatureTexture;
+		}
+
+		BindTexture(apDevice, 3, pFeatures);
 		DrawTriangle(apDevice, pCompositeShader);
 		bFeaturesReady = false;
 

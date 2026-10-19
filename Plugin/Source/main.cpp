@@ -4,6 +4,7 @@
 #include "Dependencies.hpp"
 #include "Hotkeys.hpp"
 #include "OverlayPass.hpp"
+#include "PassLog.hpp"
 #include "RenderStates.hpp"
 #include "Settings.hpp"
 #include "StencilTags.hpp"
@@ -32,6 +33,7 @@ static void MessageHandler(NVSEMessagingInterface::Message* apMessage) {
 			// Runs before the frame is rendered. Drops passes of a frame that got no depth callback.
 			OverlayPass::OnMainLoop();
 			Hotkeys::Poll();
+			PassLog::OnMainLoop();
 			TerrainPasses::Clear();
 			TopperPasses::Clear();
 			break;
@@ -49,8 +51,9 @@ EXTERN_DLL_EXPORT bool NVSEPlugin_Query(const NVSEInterface* nvse, PluginInfo* i
 EXTERN_DLL_EXPORT bool NVSEPlugin_Load(NVSEInterface* nvse) {
 	_MESSAGE("%s %u", PLUGIN_NAME, PLUGIN_VERSION);
 
-	if (!Dependencies::Check(nvse))
+	if (!Dependencies::Check(nvse)) {
 		return false;
+	}
 
 	Settings::Load();
 
@@ -66,7 +69,9 @@ EXTERN_DLL_EXPORT bool NVSEPlugin_Load(NVSEInterface* nvse) {
 }
 
 BOOL WINAPI DllMain(HANDLE hDllHandle, DWORD dwReason, LPVOID lpreserved) {
-	if (dwReason == DLL_PROCESS_ATTACH)
+	if (dwReason == DLL_PROCESS_ATTACH) {
 		DisableThreadLibraryCalls(static_cast<HMODULE>(hDllHandle));
+	}
+
 	return TRUE;
 }

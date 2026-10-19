@@ -2,6 +2,7 @@
 
 #include "Dependencies.hpp"
 #include "DrawRedirect.hpp"
+#include "PassLog.hpp"
 #include "RenderStates.hpp"
 #include "StencilTags.hpp"
 #include "Settings.hpp"
@@ -31,8 +32,14 @@
 // fades the foot of each topper into the floor.
 //
 // A pass inherits render states from the passes before it and from its pass group. `BSBatchRenderer` locks alpha test
-// and alpha to coverage for each pass group (GAME - 0xB9A120). The recorder keeps the states a pass starts with.
-// The replay sets them again before each pass. It forces the locked ones, so the pass cannot change them.
+// and alpha to coverage for each pass group (GAME - 0xB9A120). The recorder keeps the locked states a pass starts with.
+// The replay forces them, so the pass cannot change them.
+//
+// The pass draw function sets the blend and depth states of a pass in the opaque stage, but not in the replay.
+// Multi-pass lighting then drew its multiplying and additive passes with the states of the pass before them.
+// Not verified: which game check skips the setup in the replay. The recorder runs each deferred pass in the opaque
+// stage with its draws skipped and keeps the states the pass draws with. The replay sets them again before each pass.
+// Later passes of the opaque stage inherit the same states as without deferral.
 // Afterwards the replay ends the shader technique of the last pass like `RenderBatches` does, and restores the states
 // it set to their values from before the replay.
 //
@@ -94,10 +101,13 @@ namespace TopperPasses {
 	void Initialize() {
 		bEnabled = Settings::bDeferToppers && Dependencies::CanResolveSceneDepth();
 		kRecordedPasses.reserve(256);
-		if (!Settings::bDeferToppers)
+
+		if (!Settings::bDeferToppers) {
 			_MESSAGE("Toppers are drawn in the opaque stage: bDeferToppers is off");
-		else if (!bEnabled)
+		}
+		else if (!bEnabled) {
 			_MESSAGE("Toppers are drawn in the opaque stage: Depth Resolve does not provide ResolveSceneDepth");
+		}
 	}
 
 	// Sets `D3DRS_ZFUNC` on the device and in the render state cache.
@@ -109,16 +119,35 @@ namespace TopperPasses {
 
 	// Records a topper pass for the replay instead of drawing it. Returns false if it has to be drawn now.
 	bool Defer(void* apRenderPass, uint32_t auiPassType, uint32_t auiArg2, uint32_t auiArg3, uint32_t auiArg4, uint32_t auiTags) {
-		if (!bEnabled)
+		if (!bEnabled) {
 			return false;
+		}
 
 		const NiDX9RenderState* pRenderState = NiDX9Renderer::GetSingleton()->m_pkRenderState;
-		RecordedPass kPass = { apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4, BSShaderManager::GetCurrentRenderTarget(), auiTags,
-			pRenderState->m_akRenderStateSettings[D3DRS_ZFUNC].m_uiCurrValue };
-		for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++)
-			kPass.uiInherited[i] = pRenderState->m_akRenderStateSettings[kInheritedStates[i]].m_uiCurrValue;
-		for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++)
+		RecordedPass kPass = { apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4, BSShaderManager::GetCurrentRenderTarget(), auiTags };
+
+		for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++) {
 			kPass.uiLocked[i] = pRenderState->m_akRenderStateSettings[kLockedStates[i]].m_uiCurrValue;
+		}
+
+		// The game sets up the pass and leaves its states in place after the draw.
+		// Without the draw redirect, the draws would go through. The pass then keeps the states it starts with.
+		if (DrawRedirect::IsReady()) {
+			PassLog::BeginPass(apRenderPass, auiPassType, PassLog::STAGE_OPAQUE);
+			DrawRedirect::SetMode(DrawRedirect::MODE_SKIP);
+
+			TerrainPasses::DrawPass(apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4);
+
+			DrawRedirect::SetMode(DrawRedirect::MODE_OFF);
+			DrawRedirect::ConsumeCounts();
+			PassLog::EndPass();
+		}
+
+		kPass.uiZFunc = pRenderState->m_akRenderStateSettings[D3DRS_ZFUNC].m_uiCurrValue;
+
+		for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++) {
+			kPass.uiInherited[i] = pRenderState->m_akRenderStateSettings[kInheritedStates[i]].m_uiCurrValue;
+		}
 
 		kRecordedPasses.push_back(kPass);
 		return true;
@@ -129,8 +158,10 @@ namespace TopperPasses {
 	// resolve. Returns the number of passes per replay.
 	uint32_t Replay(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture) {
 		const auto itFirst = std::find_if(kRecordedPasses.begin(), kRecordedPasses.end(), [apTarget](const RecordedPass& arPass) { return arPass.pTarget == apTarget; });
-		if (itFirst == kRecordedPasses.end())
+
+		if (itFirst == kRecordedPasses.end()) {
 			return 0;
+		}
 
 		NiDX9RenderState* pRenderState = NiDX9Renderer::GetSingleton()->m_pkRenderState;
 		IDirect3DDevice9* pDevice = NiDX9Renderer::GetSingleton()->GetD3DDevice();
@@ -140,8 +171,10 @@ namespace TopperPasses {
 		// The state the opaque stage left, restored after the replay.
 		const uint32_t uiSavedZFunc = pRenderState->m_akRenderStateSettings[D3DRS_ZFUNC].m_uiCurrValue;
 		uint32_t uiSavedInherited[ARRAYSIZE(kInheritedStates)];
-		for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++)
+
+		for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++) {
 			uiSavedInherited[i] = pRenderState->m_akRenderStateSettings[kInheritedStates[i]].m_uiCurrValue;
+		}
 
 		uint32_t uiCount = 0;
 		{
@@ -156,27 +189,46 @@ namespace TopperPasses {
 			kStates.Force(D3DRS_STENCILZFAIL, D3DSTENCILOP_KEEP);
 			kStates.Force(D3DRS_STENCILWRITEMASK, StencilTags::TOPPER_BIT);
 			kStates.Force(D3DRS_STENCILREF, 0);
-			for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++)
+
+			for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++) {
 				kStates.Force(kLockedStates[i], itFirst->uiLocked[i]);
+			}
 
 			// The feature replay only draws passes with depth writes, and keeps the stencil reference of the caller.
-			const auto DrawPasses = [&](bool abFeatures) {
+			const auto DrawPasses = [&](PassLog::Stage aeStage) {
+				const bool bFeatures = aeStage == PassLog::STAGE_FEATURES;
 				uint32_t uiDrawn = 0;
-				for (auto it = itFirst; it != kRecordedPasses.end(); ++it) {
-					if (it->pTarget != apTarget || (abFeatures && !it->uiInherited[Z_WRITE_INDEX]))
-						continue;
 
-					for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++)
+				for (auto it = itFirst; it != kRecordedPasses.end(); ++it) {
+					if (it->pTarget != apTarget) {
+						continue;
+					}
+
+					if (bFeatures && !it->uiInherited[Z_WRITE_INDEX]) {
+						continue;
+					}
+
+					for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++) {
 						pRenderState->SetRenderState(kInheritedStates[i], it->uiInherited[i], 0, false);
-					for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++)
+					}
+
+					for (uint32_t i = 0; i < ARRAYSIZE(kLockedStates); i++) {
 						kStates.Update(kLockedStates[i], it->uiLocked[i]);
-					if (!abFeatures)
+					}
+
+					if (!bFeatures) {
 						kStates.Update(D3DRS_STENCILREF, it->uiTags);
+					}
+
 					SetZFunc(pRenderState, pDevice, it->uiZFunc);
 
+					PassLog::BeginPass(it->pRenderPass, it->uiPassType, aeStage);
 					TerrainPasses::DrawPass(it->pRenderPass, it->uiPassType, it->uiArg2, it->uiArg3, it->uiArg4);
+					PassLog::EndPass();
+
 					uiDrawn++;
 				}
+
 				return uiDrawn;
 			};
 
@@ -184,7 +236,7 @@ namespace TopperPasses {
 			{
 				ForcedRenderStates kDepthOnly(pRenderState);
 				kDepthOnly.Force(D3DRS_COLORWRITEENABLE, 0);
-				uiCount = DrawPasses(false);
+				uiCount = DrawPasses(PassLog::STAGE_DEPTH);
 			}
 
 			// The depth with the toppers, for the topper blend and everything after the replay. The RESZ resolve of
@@ -192,18 +244,26 @@ namespace TopperPasses {
 			// behind the cache.
 			kStates.Update(D3DRS_STENCILWRITEMASK, 0);
 			ResolveSceneDepth(apAccumulator, apTarget);
-			if (bBlend)
+
+			if (bBlend) {
 				TopperBlend::MarkBases(pDevice);
+			}
+
 			RenderStates::SyncTextureStages(pRenderState, pDevice, TEXTURE_STAGE_COUNT);
 
 			// Colour where `TOPPER_BIT` is set, and the topper's own `TERRAIN_BLEND_BIT`.
 			kStates.Update(D3DRS_STENCILFUNC, D3DCMP_EQUAL);
 			kStates.Update(D3DRS_STENCILWRITEMASK, StencilTags::TERRAIN_BLEND_BIT);
-			DrawPasses(false);
+			DrawPasses(PassLog::STAGE_COLOUR);
 
 			// Texture features where the composite blends: toppers in front of a tagged base. The depth test passes as
 			// in the colour replay. Colour writes go to the feature target only.
-			IDirect3DPixelShader9* pFeatureShader = bBlend ? TopperBlend::BeginFeatures(pDevice) : nullptr;
+			IDirect3DPixelShader9* pFeatureShader = nullptr;
+
+			if (bBlend) {
+				pFeatureShader = TopperBlend::BeginFeatures(pDevice);
+			}
+
 			if (pFeatureShader) {
 				ForcedRenderStates kFeatureStates(pRenderState);
 				kFeatureStates.Force(D3DRS_COLORWRITEENABLE, D3DCOLORWRITEENABLE_RED | D3DCOLORWRITEENABLE_GREEN | D3DCOLORWRITEENABLE_BLUE | D3DCOLORWRITEENABLE_ALPHA);
@@ -215,7 +275,7 @@ namespace TopperPasses {
 
 				DrawRedirect::SetMode(DrawRedirect::MODE_TOPPER_FEATURES);
 				DrawRedirect::BeginPass(pFeatureShader);
-				DrawPasses(true);
+				DrawPasses(PassLog::STAGE_FEATURES);
 				DrawRedirect::SetMode(DrawRedirect::MODE_OFF);
 				TopperBlend::EndFeatures(pDevice);
 			}
@@ -223,12 +283,17 @@ namespace TopperPasses {
 
 		// After the group locks are released, as in `RenderBatches`. The technique restores the states it changed.
 		CdeclCall(END_TECHNIQUE);
-		for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++)
+
+		for (uint32_t i = 0; i < ARRAYSIZE(kInheritedStates); i++) {
 			pRenderState->SetRenderState(kInheritedStates[i], uiSavedInherited[i], 0, false);
+		}
+
 		SetZFunc(pRenderState, pDevice, uiSavedZFunc);
 
-		if (bBlend)
+		if (bBlend) {
 			TopperBlend::Composite(pDevice, apAccumulator->m_pkCamera, apDepthTexture);
+		}
+
 		return uiCount;
 	}
 

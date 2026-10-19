@@ -30,11 +30,13 @@ namespace Dependencies {
 		HMODULE hVPT = GetModuleHandle("VanillaPlusTerrain.dll");
 		HMODULE hJohnnyGuitar = GetModuleHandle("johnnyguitar.dll");
 
-		if (!hShaderLoader)
+		if (!hShaderLoader) {
 			return Fail("Fallout Shader Loader not found.\nIntersection Blend cannot be used without it and is disabled.");
+		}
 
 		auto pQuery = reinterpret_cast<_NVSEPlugin_Query>(GetProcAddress(hShaderLoader, "NVSEPlugin_Query"));
 		PluginInfo kInfo = {};
+
 		if (!pQuery || !pQuery(apNVSE, &kInfo) || kInfo.version < uiShaderLoaderVersion) {
 			char cBuffer[192];
 			sprintf_s(cBuffer, "Fallout Shader Loader is outdated.\nCurrent version: %u\nMinimum required version: %u\nIntersection Blend is disabled.", kInfo.version, uiShaderLoaderVersion);
@@ -43,29 +45,47 @@ namespace Dependencies {
 
 		pCreateVertexShader = reinterpret_cast<CreateVertexShaderFn>(GetProcAddress(hShaderLoader, "CreateVertexShader"));
 		pCreatePixelShader = reinterpret_cast<CreatePixelShaderFn>(GetProcAddress(hShaderLoader, "CreatePixelShader"));
-		if (!pCreateVertexShader || !pCreatePixelShader)
+
+		if (!pCreateVertexShader || !pCreatePixelShader) {
 			return Fail("Fallout Shader Loader does not export its shader creation functions.\nIntersection Blend is disabled.");
+		}
 
 		// Depth math assumes the reversed depth buffer of LOD Flicker Fix.
-		if (!hLODFlickerFix)
+		if (!hLODFlickerFix) {
 			return Fail("LOD Flicker Fix not found.\nIntersection Blend cannot be used without it and is disabled.");
+		}
 
 		// The terrain blend blacklist and the topper list take editor IDs. The game drops most of them at load.
-		if (!hJohnnyGuitar)
+		if (!hJohnnyGuitar) {
 			return Fail("JohnnyGuitar NVSE not found.\nIntersection Blend cannot be used without it and is disabled.");
+		}
 
-		if (!hDepthResolve)
+		if (!hDepthResolve) {
 			return Fail("Depth Resolve not found.\nIntersection Blend cannot be used without it and is disabled.");
+		}
 
 		pRegisterPostResolveDepthCallback = reinterpret_cast<RegisterPostResolveDepthCallbackFn>(GetProcAddress(hDepthResolve, "RegisterPostResolveDepthCallback"));
-		if (!pRegisterPostResolveDepthCallback)
+
+		if (!pRegisterPostResolveDepthCallback) {
 			return Fail("Depth Resolve does not provide RegisterPostResolveDepthCallback.\nA Depth Resolve build with the post-resolve callback is required.\nIntersection Blend is disabled.");
+		}
 
 		// Optional. Without it, toppers are not deferred.
 		pResolveSceneDepth = reinterpret_cast<ResolveSceneDepthFn>(GetProcAddress(hDepthResolve, "ResolveSceneDepth"));
 
-		_MESSAGE("Dependencies OK (Shader Loader %u, Vanilla Plus Terrain %s, Depth Resolve %s ResolveSceneDepth)", kInfo.version, hVPT ? "found" : "not found",
-			pResolveSceneDepth ? "with" : "without");
+		const char* pTerrainStatus = "not found";
+
+		if (hVPT) {
+			pTerrainStatus = "found";
+		}
+
+		const char* pResolveStatus = "without";
+
+		if (pResolveSceneDepth) {
+			pResolveStatus = "with";
+		}
+
+		_MESSAGE("Dependencies OK (Shader Loader %u, Vanilla Plus Terrain %s, Depth Resolve %s ResolveSceneDepth)", kInfo.version, pTerrainStatus, pResolveStatus);
 		return true;
 	}
 
@@ -79,8 +99,9 @@ namespace Dependencies {
 
 	// Resolves the depth of the given render target into Depth Resolve's depth texture again.
 	void ResolveSceneDepth(BSShaderAccumulator* apAccumulator, BSRenderedTexture* apTarget) {
-		if (pResolveSceneDepth)
+		if (pResolveSceneDepth) {
 			pResolveSceneDepth(apAccumulator, apTarget);
+		}
 	}
 
 	// Loads a vertex shader from `Data\Shaders\Loose\` through Shader Loader.

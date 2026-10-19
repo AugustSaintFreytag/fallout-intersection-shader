@@ -100,9 +100,17 @@ namespace GroundBuffer {
 
 	// Records the given geometry as drawn into the height field. Returns false if it was already drawn.
 	static bool AddToField(const NiGeometry* apGeometry) {
-		if (IsInField(apGeometry))
+		if (IsInField(apGeometry)) {
 			return false;
-		kFieldGeometry[apGeometry] = apGeometry->m_pWorldBound ? apGeometry->m_pWorldBound->m_kCenter : NiPoint3();
+		}
+
+		NiPoint3 kCenter;
+
+		if (apGeometry->m_pWorldBound) {
+			kCenter = apGeometry->m_pWorldBound->m_kCenter;
+		}
+
+		kFieldGeometry[apGeometry] = kCenter;
 		return true;
 	}
 
@@ -117,6 +125,7 @@ namespace GroundBuffer {
 	static void ReleaseResources() {
 		SafeRelease(pFieldDepth);
 		SafeRelease(pFieldTexture);
+
 		for (uint32_t i = 0; i < FIELD_TARGET_COUNT; i++) {
 			SafeRelease(pAttributeSurfaces[i]);
 			SafeRelease(pAttributeTextures[i]);
@@ -132,16 +141,19 @@ namespace GroundBuffer {
 	}
 
 	static bool __cdecl OnDeviceReset(bool abBeforeReset, void*) {
-		if (abBeforeReset)
+		if (abBeforeReset) {
 			ReleaseResources();
+		}
+
 		return true;
 	}
 
 	// Creates the height field and the attribute fields if missing.
 	// If create fails, disables the ground buffer and returns false.
 	static bool CreateFieldResources(IDirect3DDevice9* apDevice) {
-		if (pFieldDepth)
+		if (pFieldDepth) {
 			return true;
+		}
 
 		bool bCreated = SUCCEEDED(apDevice->CreateTexture(FIELD_SIZE, FIELD_SIZE, 1, D3DUSAGE_DEPTHSTENCIL, static_cast<D3DFORMAT>(MAKEFOURCC('I', 'N', 'T', 'Z')), D3DPOOL_DEFAULT, &pFieldTexture, nullptr))
 			&& SUCCEEDED(pFieldTexture->GetSurfaceLevel(0, &pFieldDepth));
@@ -163,8 +175,9 @@ namespace GroundBuffer {
 	// Creates the ground buffer targets at the given size if missing or sized differently.
 	// If create fails, disables the ground buffer and returns false.
 	static bool CreateGroundResources(IDirect3DDevice9* apDevice, uint32_t auiWidth, uint32_t auiHeight) {
-		if (pGroundSurface && uiGroundWidth == auiWidth && uiGroundHeight == auiHeight)
+		if (pGroundSurface && uiGroundWidth == auiWidth && uiGroundHeight == auiHeight) {
 			return true;
+		}
 
 		SafeRelease(pGroundSurface);
 		SafeRelease(pGroundTexture);
@@ -201,6 +214,7 @@ namespace GroundBuffer {
 	void Initialize() {
 		pVertexShader = Dependencies::CreateVertexShader("IntersectionBlend\\GroundBuffer.vso");
 		pPixelShader = Dependencies::CreatePixelShader("IntersectionBlend\\GroundBuffer.pso");
+
 		if (!pVertexShader || !pPixelShader) {
 			_MESSAGE("Failed to load ground buffer shaders (VS %p, PS %p), terrain overlay disabled", pVertexShader, pPixelShader);
 			return;
@@ -215,6 +229,7 @@ namespace GroundBuffer {
 			D3DDECL_END()
 		};
 		NiDX9Renderer* pRenderer = NiDX9Renderer::GetSingleton();
+
 		if (FAILED(pRenderer->GetD3DDevice()->CreateVertexDeclaration(kElements, &pDeclaration))) {
 			_MESSAGE("Failed to create the ground buffer vertex declaration, terrain overlay disabled");
 			return;
@@ -270,7 +285,11 @@ namespace GroundBuffer {
 		const NiPoint3 kSceneUp = GetColumn(kCameraWorld.m_Rotate, 1);
 		const NiPoint3 kSceneRight = GetColumn(kCameraWorld.m_Rotate, 2);
 		const NiPoint3 kSceneCross = Cross(kSceneDirection, kSceneUp);
-		const float fHandedness = kSceneCross.x * kSceneRight.x + kSceneCross.y * kSceneRight.y + kSceneCross.z * kSceneRight.z < 0.0f ? -1.0f : 1.0f;
+		float fHandedness = 1.0f;
+
+		if (kSceneCross.x * kSceneRight.x + kSceneCross.y * kSceneRight.y + kSceneCross.z * kSceneRight.z < 0.0f) {
+			fHandedness = -1.0f;
+		}
 
 		const NiPoint3 kDirection(0.0f, 0.0f, -1.0f);
 		const NiPoint3 kUp(0.0f, 1.0f, 0.0f);
@@ -284,6 +303,7 @@ namespace GroundBuffer {
 		D3DXMatrixMultiply(&kFieldViewProj, pRenderer->GetD3DView(), pRenderer->GetD3DProj());
 
 		static uint32_t uiLoggedCameras = 0;
+
 		if (uiLoggedCameras < 5) {
 			uiLoggedCameras++;
 			D3DXMATRIX kInverseView;
@@ -292,13 +312,17 @@ namespace GroundBuffer {
 				kFieldCenter.x, kFieldCenter.y, kFieldCenter.z, kInverseView._41, kInverseView._42, kInverseView._43, kEye.x, kEye.y, kEye.z);
 		}
 
-		for (uint32_t i = 0; i < FIELD_TARGET_COUNT; i++)
+		for (uint32_t i = 0; i < FIELD_TARGET_COUNT; i++) {
 			apDevice->SetRenderTarget(i, pAttributeSurfaces[i]);
+		}
+
 		apDevice->SetDepthStencilSurface(pFieldDepth);
-		if (bFull)
+
+		if (bFull) {
 			apDevice->Clear(0, nullptr, D3DCLEAR_ZBUFFER, 0, 0.0f, 0); // Reversed depth: 0 is the far plane.
 
 		RenderStates::SyncTextureStages(pRenderState, apDevice, TERRAIN_SAMPLER_COUNT);
+		}
 
 		uint32_t uiDrawn = 0;
 		{
@@ -327,19 +351,23 @@ namespace GroundBuffer {
 			uiDrawn = TerrainPasses::Replay(apTarget, AddToField, [apDevice](const NiGeometry* apGeometry, uint32_t) {
 				DrawRedirect::BeginPass(GroundShaders::GetFieldShader());
 				const NiBound* pBound = apGeometry->m_pWorldBound;
-				const float fBlock[4] = {
-					pBound ? std::floor(pBound->m_kCenter.x / LANDSCAPE_BLOCK_SIZE) : 0.0f,
-					pBound ? std::floor(pBound->m_kCenter.y / LANDSCAPE_BLOCK_SIZE) : 0.0f,
-					0.0f, 0.0f,
-				};
+				float fBlock[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
+
+				if (pBound) {
+					fBlock[0] = std::floor(pBound->m_kCenter.x / LANDSCAPE_BLOCK_SIZE);
+					fBlock[1] = std::floor(pBound->m_kCenter.y / LANDSCAPE_BLOCK_SIZE);
+				}
+
 				apDevice->SetPixelShaderConstantF(BLOCK_CONSTANT_REGISTER, fBlock, 1);
 			});
 			DrawRedirect::SetMode(DrawRedirect::MODE_OFF);
 			apDevice->SetRenderState(D3DRS_ZFUNC, pRenderState->m_akRenderStateSettings[D3DRS_ZFUNC].m_uiCurrValue);
 		}
 
-		for (uint32_t i = 1; i < FIELD_TARGET_COUNT; i++)
+		for (uint32_t i = 1; i < FIELD_TARGET_COUNT; i++) {
 			apDevice->SetRenderTarget(i, nullptr);
+		}
+
 		apDevice->SetRenderTarget(0, pSavedTarget);
 		apDevice->SetDepthStencilSurface(pSavedDepth);
 		pRenderer->SetCameraData(apCamera);
@@ -350,6 +378,7 @@ namespace GroundBuffer {
 		bFieldValid = true;
 
 		static uint32_t uiLoggedRedraws = 0;
+
 		if (bFull && uiLoggedRedraws < 2) {
 			uiLoggedRedraws++;
 			_MESSAGE("Height field redraw, landscape passes:");
@@ -357,8 +386,15 @@ namespace GroundBuffer {
 		}
 
 		static uint32_t uiLoggedUpdates = 0;
+
 		if (uiLoggedUpdates < 5) {
-			_MESSAGE("Height field %s: %u landscape passes drawn, centre %.0f, %.0f", bFull ? "redrawn" : "extended", uiDrawn, kFieldCenter.x, kFieldCenter.y);
+			const char* pUpdate = "extended";
+
+			if (bFull) {
+				pUpdate = "redrawn";
+			}
+
+			_MESSAGE("Height field %s: %u landscape passes drawn, centre %.0f, %.0f", pUpdate, uiDrawn, kFieldCenter.x, kFieldCenter.y);
 			uiLoggedUpdates++;
 		}
 	}
@@ -391,7 +427,20 @@ namespace GroundBuffer {
 		};
 		const float fFieldParams[4] = { 1.0f / FIELD_SIZE, 1.0f / FIELD_SIZE, Settings::fMaxDistance, 0.0f };
 		const float fTexelSize[4] = { 1.0f / uiGroundWidth, 1.0f / uiGroundHeight, 0.0f, 0.0f };
-		const float fGroundParams[4] = { abHeightLayout ? 1.0f : 0.0f, Settings::fBlendRange, Settings::bUnrolledMapping ? 1.0f : 0.0f, Settings::eDebugMode == Settings::DEBUG_RAW_VERTEX_COLOR ? 1.0f : 0.0f };
+		float fGroundParams[4] = { 0.0f, Settings::fBlendRange, 0.0f, 0.0f };
+
+		if (abHeightLayout) {
+			fGroundParams[0] = 1.0f;
+		}
+
+		if (Settings::bUnrolledMapping) {
+			fGroundParams[2] = 1.0f;
+		}
+
+		if (Settings::eDebugMode == Settings::DEBUG_RAW_VERTEX_COLOR) {
+			fGroundParams[3] = 1.0f;
+		}
+
 		const float fEyePosition[4] = { kEye.x, kEye.y, kEye.z, 0.0f };
 		const float fBlendParams[4] = { Settings::fBlendClimbHeight, 0.0f, 0.0f, 0.0f };
 
@@ -426,6 +475,7 @@ namespace GroundBuffer {
 
 		IDirect3DBaseTexture9* const pTextures[] = { apDepthTexture, pFieldTexture, pAttributeTextures[0], pAttributeTextures[1], pAttributeTextures[2] };
 		static_assert(ARRAYSIZE(pTextures) == FIELD_SAMPLER + FIELD_TARGET_COUNT, "attribute fields follow the height field");
+
 		for (uint32_t i = 0; i < ARRAYSIZE(pTextures); i++) {
 			apDevice->SetTexture(i, pTextures[i]);
 			apDevice->SetSamplerState(i, D3DSAMP_MINFILTER, D3DTEXF_POINT);
@@ -442,6 +492,7 @@ namespace GroundBuffer {
 
 		// Log texture bindings and where each matrix puts the eye and field centre. First frames only.
 		static uint32_t uiLoggedFrames = 0;
+
 		if (uiLoggedFrames < 3) {
 			uiLoggedFrames++;
 
@@ -483,18 +534,23 @@ namespace GroundBuffer {
 	// Uses the height layout for debug mode 4 if requested. Runs while the target is bound.
 	// Returns the first ground buffer target, or null if it is unavailable.
 	IDirect3DTexture9* Render(IDirect3DDevice9* apDevice, const NiCamera* apCamera, const BSRenderedTexture* apTarget, IDirect3DBaseTexture9* apDepthTexture, bool abHeightLayout) {
-		if (!bReady || !apCamera || !apDepthTexture)
+		if (!bReady || !apCamera || !apDepthTexture) {
 			return nullptr;
+		}
 
 		IDirect3DSurface9* pTarget = nullptr;
-		if (FAILED(apDevice->GetRenderTarget(0, &pTarget)))
+
+		if (FAILED(apDevice->GetRenderTarget(0, &pTarget))) {
 			return nullptr;
+		}
+
 		D3DSURFACE_DESC kDesc;
 		pTarget->GetDesc(&kDesc);
 		pTarget->Release();
 
-		if (!CreateFieldResources(apDevice) || !CreateGroundResources(apDevice, kDesc.Width, kDesc.Height))
+		if (!CreateFieldResources(apDevice) || !CreateGroundResources(apDevice, kDesc.Width, kDesc.Height)) {
 			return nullptr;
+		}
 
 		// Copy the scene camera's matrices before the height field camera replaces them.
 		NiDX9Renderer* pRenderer = NiDX9Renderer::GetSingleton();

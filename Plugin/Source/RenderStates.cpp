@@ -16,8 +16,9 @@ namespace RenderStates {
 
 	// Records changes to tracked states that `NiDX9RenderState` is about to skip because they are locked.
 	static void __fastcall SetRenderStateHook(NiDX9RenderState* apThis, void*, D3DRENDERSTATETYPE aeState, uint32_t auiValue, int aiUnused, bool abSave) {
-		if (static_cast<uint32_t>(aeState) < STATE_COUNT && bTracked[aeState] && apThis->m_bSavedStates[aeState])
+		if (static_cast<uint32_t>(aeState) < STATE_COUNT && bTracked[aeState] && apThis->m_bSavedStates[aeState]) {
 			kRequests[aeState] = { true, auiValue, abSave };
+		}
 
 		pOriginal(apThis, aeState, auiValue, aiUnused, abSave);
 	}
@@ -36,8 +37,9 @@ namespace RenderStates {
 
 	// Starts or stops recording the changes requested for the given state while it is locked.
 	void Track(D3DRENDERSTATETYPE aeState, bool abTrack) {
-		if (static_cast<uint32_t>(aeState) >= STATE_COUNT)
+		if (static_cast<uint32_t>(aeState) >= STATE_COUNT) {
 			return;
+		}
 
 		bTracked[aeState] = abTrack && pOriginal;
 		kRequests[aeState] = {};
@@ -52,8 +54,9 @@ namespace RenderStates {
 	// without textures and turns black. With the device matching the cache, both cases draw with the right textures.
 	// Not verified: which game check skips the setup.
 	void SyncTextureStages(NiDX9RenderState* apRenderState, IDirect3DDevice9* apDevice, uint32_t auiStageCount) {
-		for (uint32_t i = 0; i < auiStageCount; i++)
+		for (uint32_t i = 0; i < auiStageCount; i++) {
 			apDevice->SetTexture(i, apRenderState->m_apkTextureStageTextures[i]);
+		}
 	}
 
 	const Request& GetRequest(D3DRENDERSTATETYPE aeState) {

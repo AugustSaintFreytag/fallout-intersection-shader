@@ -44,8 +44,11 @@ namespace Settings {
 
 	static std::string Trim(const std::string& arText) {
 		const size_t uiStart = arText.find_first_not_of(" \t");
-		if (uiStart == std::string::npos)
+
+		if (uiStart == std::string::npos) {
 			return {};
+		}
+
 		return arText.substr(uiStart, arText.find_last_not_of(" \t") - uiStart + 1);
 	}
 
@@ -53,12 +56,16 @@ namespace Settings {
 		std::vector<uint8_t> kTypes;
 		std::stringstream kStream(arList);
 		std::string sName;
+
 		while (std::getline(kStream, sName, ',')) {
 			sName = Trim(sName);
-			if (sName.empty())
+
+			if (sName.empty()) {
 				continue;
+			}
 
 			bool bFound = false;
+
 			for (const FormTypeName& rType : kFormTypeNames) {
 				if (!_stricmp(rType.pName, sName.c_str())) {
 					kTypes.push_back(rType.ucType);
@@ -66,8 +73,9 @@ namespace Settings {
 					break;
 				}
 			}
-			if (!bFound)
+			if (!bFound) {
 				_MESSAGE("Settings: Unknown form type '%s', will be skipped.", sName.c_str());
+			}
 		}
 		return kTypes;
 	}
@@ -78,11 +86,14 @@ namespace Settings {
 		const DWORD uiLength = GetPrivateProfileSection(apSection, kBuffer.data(), static_cast<DWORD>(kBuffer.size()), FORMS_INI_PATH);
 
 		std::vector<std::string> kEntries;
+
 		for (const char* pLine = kBuffer.data(); pLine < kBuffer.data() + uiLength && *pLine; pLine += strlen(pLine) + 1) {
 			std::string sLine(pLine);
 			sLine = Trim(sLine.substr(0, sLine.find_first_of(";#=")));
-			if (!sLine.empty())
+
+			if (!sLine.empty()) {
 				kEntries.push_back(sLine);
+			}
 		}
 		return kEntries;
 	}
@@ -100,6 +111,7 @@ namespace Settings {
 		fStaticBlendRange = std::max(GetFloat("StaticBlend", "fStaticBlendRange", fStaticBlendRange), 0.0f);
 		fStaticContactShadowFactor = std::clamp(GetFloat("StaticBlend", "fStaticContactShadowFactor", fStaticContactShadowFactor), 0.0f, 1.0f);
 		eDebugMode = static_cast<DebugMode>(GetUInt("Debug", "iDebugMode", eDebugMode));
+		bLogTopperPasses = GetUInt("Debug", "bLogTopperPasses", bLogTopperPasses) != 0;
 
 		_MESSAGE("Settings: Unrolled mapping %u, blend range %.1f, climb height %.1f, edge softness %.2f, edge feature strength %.2f, edge feature size %.1f, contact shadow %.2f over %.2f, static blend range %.1f, static contact shadow factor %.2f, debug mode %u",
 			bUnrolledMapping, fBlendRange, fBlendClimbHeight, fEdgeSoftness, fEdgeFeatureStrength, fEdgeFeatureSize, fContactShadow, fContactShadowWidth, fStaticBlendRange, fStaticContactShadowFactor, eDebugMode);
