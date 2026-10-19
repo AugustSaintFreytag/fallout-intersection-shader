@@ -51,6 +51,7 @@ public:
 
 			if (it->bTracked) {
 				const RenderStates::Request& rRequest = RenderStates::GetRequest(it->eState);
+
 				if (rRequest.bRequested) {
 					uiValue = rRequest.uiValue;
 					bSave = rRequest.bSave;
@@ -74,8 +75,10 @@ public:
 
 		pRenderState->m_bSavedStates[aeState] = false;
 		pRenderState->SetRenderState(aeState, auiValue, 0, true);
-		if (!bSaved)
+
+		if (!bSaved) {
 			RenderStates::Track(aeState, true);
+		}
 	}
 
 	// Changes the value of a state this object already forces. The render state cache skips the device call if it is unchanged.

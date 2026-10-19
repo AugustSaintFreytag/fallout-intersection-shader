@@ -39,10 +39,12 @@ namespace TerrainPasses {
 
 	// Records landscape passes, defers topper passes and wraps every other pass draw with stencil tagging.
 	static void __cdecl RenderPassHook(void* apRenderPass, uint32_t auiPassType, uint32_t auiArg2, uint32_t auiArg3, uint32_t auiArg4) {
-		if (auiPassType >= FIRST_LANDSCAPE_PASS && auiPassType <= LAST_LANDSCAPE_PASS)
+		if (auiPassType >= FIRST_LANDSCAPE_PASS && auiPassType <= LAST_LANDSCAPE_PASS) {
 			kRecordedPasses.push_back({ apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4, BSShaderManager::GetCurrentRenderTarget() });
+		}
 
 		const uint32_t uiTags = StencilTags::BeginPass(apRenderPass);
+
 		if ((uiTags & StencilTags::TOPPER_BIT) && TopperPasses::Defer(apRenderPass, auiPassType, auiArg2, auiArg3, auiArg4, uiTags)) {
 			StencilTags::EndPass();
 			return;
@@ -81,19 +83,34 @@ namespace TerrainPasses {
 		return static_cast<const BSShaderProperty::RenderPass*>(arPass.pRenderPass)->pGeometry;
 	}
 
+	// Returns the name of a given scene graph object, or an empty string.
+	static const char* GetObjectName(const NiObjectNET* apObject) {
+		if (!apObject || !apObject->GetName()) {
+			return "";
+		}
+
+		return apObject->GetName();
+	}
+
 	// Draws the landscape passes recorded into the given target again, with the state the caller has forced.
 	// Only passes accepted by the filter are drawn, if one is given. Calls the callback before each draw.
 	// Returns the number of passes drawn.
 	uint32_t Replay(const BSRenderedTexture* apTarget, const PassFilter& arFilter, const PassCallback& arBeforeDraw) {
 		uint32_t uiCount = 0;
+
 		for (const RecordedPass& rPass : kRecordedPasses) {
 			// Reflections draw the landscape into their own targets.
-			if (rPass.pTarget != apTarget)
+			if (rPass.pTarget != apTarget) {
 				continue;
-			if (arFilter && !arFilter(GetGeometry(rPass)))
+			}
+
+			if (arFilter && !arFilter(GetGeometry(rPass))) {
 				continue;
-			if (arBeforeDraw)
+			}
+
+			if (arBeforeDraw) {
 				arBeforeDraw(GetGeometry(rPass), rPass.uiPassType);
+			}
 
 			DrawPass(rPass.pRenderPass, rPass.uiPassType, rPass.uiArg2, rPass.uiArg3, rPass.uiArg4);
 			uiCount++;
@@ -105,23 +122,38 @@ namespace TerrainPasses {
 	// Logs every landscape pass recorded into the given target with pass type, geometry, parent and world bound.
 	void LogRecorded(const BSRenderedTexture* apTarget) {
 		for (const RecordedPass& rPass : kRecordedPasses) {
-			if (rPass.pTarget != apTarget)
+			if (rPass.pTarget != apTarget) {
 				continue;
+			}
 
 			const NiGeometry* pGeometry = GetGeometry(rPass);
-			const NiNode* pParent = pGeometry ? pGeometry->m_pkParent : nullptr;
-			const NiBound* pBound = pGeometry ? pGeometry->m_pWorldBound : nullptr;
+			const NiNode* pParent = nullptr;
+			const NiBound* pBound = nullptr;
+
+			if (pGeometry) {
+				pParent = pGeometry->m_pkParent;
+				pBound = pGeometry->m_pWorldBound;
+			}
+
+			NiPoint3 kCenter;
+			float fRadius = 0.0f;
+
+			if (pBound) {
+				kCenter = pBound->m_kCenter;
+				fRadius = pBound->m_fRadius;
+			}
+
 			_MESSAGE("  pass %u, geometry %p '%s', parent '%s', bound centre %.0f, %.0f, %.0f, radius %.0f", rPass.uiPassType, pGeometry,
-				pGeometry && pGeometry->GetName() ? pGeometry->GetName() : "", pParent && pParent->GetName() ? pParent->GetName() : "",
-				pBound ? pBound->m_kCenter.x : 0.0f, pBound ? pBound->m_kCenter.y : 0.0f, pBound ? pBound->m_kCenter.z : 0.0f, pBound ? pBound->m_fRadius : 0.0f);
+				GetObjectName(pGeometry), GetObjectName(pParent), kCenter.x, kCenter.y, kCenter.z, fRadius);
 		}
 	}
 
 	// Returns whether the filter accepts any landscape pass recorded into the given target.
 	bool Any(const BSRenderedTexture* apTarget, const PassFilter& arFilter) {
 		for (const RecordedPass& rPass : kRecordedPasses) {
-			if (rPass.pTarget == apTarget && arFilter(GetGeometry(rPass)))
+			if (rPass.pTarget == apTarget && arFilter(GetGeometry(rPass))) {
 				return true;
+			}
 		}
 		return false;
 	}

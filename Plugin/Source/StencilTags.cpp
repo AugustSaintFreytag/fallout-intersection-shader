@@ -103,10 +103,12 @@ namespace StencilTags {
 	// Returns null for terrain, grass and other objects without a reference.
 	static const void* GetParentReference(const NiAVObject* apObject) {
 		const NiAVObject* pNode = apObject;
+
 		for (uint32_t uiDepth = 0; pNode && uiDepth < MAX_PARENT_DEPTH; uiDepth++) {
 			if (Field<uint32_t>(pNode, 0) == VTBL_BS_FADE_NODE) {
-				if (const void* pReference = Field<const void*>(pNode, FADE_NODE_REFERENCE))
+				if (const void* pReference = Field<const void*>(pNode, FADE_NODE_REFERENCE)) {
 					return pReference;
+				}
 			}
 			pNode = pNode->m_pkParent;
 		}
@@ -116,8 +118,10 @@ namespace StencilTags {
 	// Returns whether any part of the geometry's bound lies within `fMaxDistance` in view depth of the tagged stage's camera.
 	static bool IsInRange(const NiGeometry* apGeometry) {
 		const NiBound* pBound = apGeometry->m_pWorldBound;
-		if (!pBound)
+
+		if (!pBound) {
 			return true;
+		}
 
 		const NiPoint3 kOffset(pBound->m_kCenter.x - kEye.x, pBound->m_kCenter.y - kEye.y, pBound->m_kCenter.z - kEye.z);
 		const float fDepth = kOffset.x * kViewDirection.x + kOffset.y * kViewDirection.y + kOffset.z * kViewDirection.z;
@@ -128,56 +132,90 @@ namespace StencilTags {
 	static const char* GetEditorID(const void* apForm) {
 		const uint32_t uiFunction = (*reinterpret_cast<const uint32_t* const*>(apForm))[FORM_GET_EDITOR_ID / 4];
 		const char* pEditorID = ThisCall<const char*>(uiFunction, apForm);
-		return pEditorID ? pEditorID : "";
+
+		if (!pEditorID) {
+			return "";
+		}
+
+		return pEditorID;
+	}
+
+	// Returns the name of a given scene graph object, or an empty string.
+	static const char* GetObjectName(const NiObjectNET* apObject) {
+		if (!apObject || !apObject->GetName()) {
+			return "";
+		}
+
+		return apObject->GetName();
 	}
 
 	// Logs why the given geometry gets no `TERRAIN_BLEND_BIT`, once per base form, or per scene root without a reference.
 	// Debug mode 3 only.
 	static void LogUntagged(const NiGeometry* apGeometry, const void* apBaseForm, const char* apReason) {
-		if (Settings::eDebugMode != Settings::DEBUG_STENCIL_TAGS || kLoggedUntagged.size() >= MAX_UNTAGGED_LINES)
+		if (Settings::eDebugMode != Settings::DEBUG_STENCIL_TAGS || kLoggedUntagged.size() >= MAX_UNTAGGED_LINES) {
 			return;
+		}
 
 		if (apBaseForm) {
 			char cKey[16];
 			sprintf_s(cKey, "%08X", Field<uint32_t>(apBaseForm, FORM_REF_ID));
-			if (!kLoggedUntagged.insert(cKey).second)
+
+			if (!kLoggedUntagged.insert(cKey).second) {
 				return;
+			}
+
 			_MESSAGE("Untagged: %s '%s', form type %u: %s.", cKey, GetEditorID(apBaseForm), Field<uint8_t>(apBaseForm, FORM_TYPE_ID), apReason);
 			return;
 		}
 
 		const NiAVObject* pRoot = apGeometry;
-		for (uint32_t uiDepth = 0; pRoot->m_pkParent && uiDepth < MAX_PARENT_DEPTH; uiDepth++)
+
+		for (uint32_t uiDepth = 0; pRoot->m_pkParent && uiDepth < MAX_PARENT_DEPTH; uiDepth++) {
 			pRoot = pRoot->m_pkParent;
-		const char* pRootName = pRoot->GetName() ? pRoot->GetName() : "";
-		if (!kLoggedUntagged.insert(std::string("root ") + pRootName).second)
+		}
+
+		const char* pRootName = GetObjectName(pRoot);
+
+		if (!kLoggedUntagged.insert(std::string("root ") + pRootName).second) {
 			return;
-		_MESSAGE("Untagged: Geometry '%s' under root '%s': %s.", apGeometry->GetName() ? apGeometry->GetName() : "", pRootName, apReason);
+		}
+
+		_MESSAGE("Untagged: Geometry '%s' under root '%s': %s.", GetObjectName(apGeometry), pRootName, apReason);
 	}
 
 	// Returns the tag bits for the reference that owns the given geometry, 0 if it gets none. Sets the reference, or null.
 	static uint32_t GetTags(const NiGeometry* apGeometry, const void*& arReference) {
 		const void* pReference = GetParentReference(apGeometry);
 		arReference = pReference;
+
 		if (!pReference) {
 			LogUntagged(apGeometry, nullptr, "No BSFadeNode with a reference above it");
 			return 0;
 		}
 
 		const void* pBaseForm = Field<const void*>(pReference, REFR_BASE_FORM);
-		if (!pBaseForm)
+
+		if (!pBaseForm) {
 			return 0;
+		}
 
 		const uint32_t uiFormID = Field<uint32_t>(pBaseForm, FORM_REF_ID);
 		uint32_t uiTags = 0;
-		if (!bTypeEligible[Field<uint8_t>(pBaseForm, FORM_TYPE_ID)])
+
+		if (!bTypeEligible[Field<uint8_t>(pBaseForm, FORM_TYPE_ID)]) {
 			LogUntagged(apGeometry, pBaseForm, "Form type not in sTerrainBlendTypes");
-		else if (kBlacklist.contains(uiFormID))
+		}
+		else if (kBlacklist.contains(uiFormID)) {
 			LogUntagged(apGeometry, pBaseForm, "Blacklisted");
-		else
+		}
+		else {
 			uiTags |= TERRAIN_BLEND_BIT;
-		if (kToppers.contains(uiFormID))
+		}
+
+		if (kToppers.contains(uiFormID)) {
 			uiTags |= TOPPER_BIT;
+		}
+
 		return uiTags;
 	}
 
@@ -185,12 +223,16 @@ namespace StencilTags {
 	// Returns the form IDs.
 	static std::unordered_set<uint32_t> ResolveEditorIDs(const std::vector<std::string>& arEditorIDs, const char* apListName) {
 		std::unordered_set<uint32_t> kFormIDs;
+
 		for (const std::string& rEditorID : arEditorIDs) {
 			const void* pForm = CdeclCall<const void*>(GET_FORM_BY_EDITOR_ID, rEditorID.c_str());
-			if (pForm)
+
+			if (pForm) {
 				kFormIDs.insert(Field<uint32_t>(pForm, FORM_REF_ID));
-			else
+			}
+			else {
 				_MESSAGE("%s: No form with editor ID '%s', will be skipped.", apListName, rEditorID.c_str());
+			}
 		}
 		return kFormIDs;
 	}
@@ -199,8 +241,10 @@ namespace StencilTags {
 	// Call once the game data is loaded, at NVSE DeferredInit.
 	void LoadSelection() {
 		std::fill(std::begin(bTypeEligible), std::end(bTypeEligible), false);
-		for (uint8_t ucType : Settings::kBlendTypesTerrainToStatic)
+
+		for (uint8_t ucType : Settings::kBlendTypesTerrainToStatic) {
 			bTypeEligible[ucType] = true;
+		}
 
 		kBlacklist = ResolveEditorIDs(Settings::kTerrainToStaticBlacklist, "Terrain-to-Static Blacklist");
 		kToppers = ResolveEditorIDs(Settings::kStaticToStaticWhitelist, "Static-to-Static Whitelist");
@@ -213,6 +257,7 @@ namespace StencilTags {
 	static void BeginTagging(const BSShaderAccumulator* apAccumulator) {
 		// Gamebryo cameras look along their local x axis.
 		const NiCamera* pCamera = apAccumulator->m_pkCamera;
+
 		if (pCamera) {
 			const NiMatrix3& kRotate = pCamera->m_kWorld.m_Rotate;
 			kEye = pCamera->m_kWorld.m_Translate;
@@ -256,13 +301,16 @@ namespace StencilTags {
 	// Runs the opaque stage, with tagging around it if the accumulator qualifies.
 	static void RunPreResolveDepth(PreResolveDepthFn apOriginal, BSShaderAccumulator* apAccumulator) {
 		const bool bTag = !pTaggingStates && ShouldTag(apAccumulator);
-		if (bTag)
+
+		if (bTag) {
 			BeginTagging(apAccumulator);
+		}
 
 		apOriginal(apAccumulator);
 
-		if (bTag)
+		if (bTag) {
 			EndTagging();
+		}
 	}
 
 	static void __cdecl PreResolveDepthStandardHook(BSShaderAccumulator* apAccumulator) {
@@ -289,28 +337,40 @@ namespace StencilTags {
 	// Call before every batch-rendered pass draw. Returns the tag bits. `EndPass` has to be called after the draw
 	// if they are not 0.
 	uint32_t BeginPass(const void* apRenderPass) {
-		if (!pTaggingStates || !apRenderPass)
+		if (!pTaggingStates || !apRenderPass) {
 			return 0;
+		}
 
 		const NiGeometry* pGeometry = static_cast<const BSShaderProperty::RenderPass*>(apRenderPass)->pGeometry;
+
 		if (pGeometry != pLastGeometry) {
 			pLastGeometry = pGeometry;
 			pLastReference = nullptr;
-			uiLastTags = pGeometry ? GetTags(pGeometry, pLastReference) : 0;
+			uiLastTags = 0;
+
+			if (pGeometry) {
+				uiLastTags = GetTags(pGeometry, pLastReference);
+			}
+
 			if (uiLastTags && !IsInRange(pGeometry)) {
 				uiLastTags = 0;
 				uiDistantGeometry++;
 			}
 			else if (uiLastTags) {
 				uiTaggedGeometry++;
-				if (uiLastTags & TOPPER_BIT)
+
+				if (uiLastTags & TOPPER_BIT) {
 					uiTopperGeometry++;
+				}
 			}
 		}
 
 		bInTaggedPass = uiLastTags != 0;
-		if (uiLastTags)
+
+		if (uiLastTags) {
 			pTaggingStates->Update(D3DRS_STENCILREF, uiLastTags);
+		}
+
 		return uiLastTags;
 	}
 
@@ -318,23 +378,41 @@ namespace StencilTags {
 	void EndPass() {
 		// Draws outside the batch renderer (sky, LOD) must not inherit the tag.
 		bInTaggedPass = false;
-		if (pTaggingStates)
+
+		if (pTaggingStates) {
 			pTaggingStates->Update(D3DRS_STENCILREF, 0);
+		}
 	}
 
 	// Logs the first draws without depth writes of statics that blend with terrain, such as decals and light passes, and
 	// whether their reference drew its own geometry before. Debug mode 3 only. Such draws only set the tag after it.
 	static void LogDecal(bool abAfterGeometry) {
 		static constexpr uint32_t MAX_DECAL_LINES = 50;
-		if (Settings::eDebugMode != Settings::DEBUG_STENCIL_TAGS || kLoggedDecals.size() >= MAX_DECAL_LINES || !pLastGeometry)
+
+		if (Settings::eDebugMode != Settings::DEBUG_STENCIL_TAGS || kLoggedDecals.size() >= MAX_DECAL_LINES || !pLastGeometry) {
 			return;
+		}
 
 		const void* pBaseForm = Field<const void*>(pLastReference, REFR_BASE_FORM);
-		const char* pEditorID = pBaseForm ? GetEditorID(pBaseForm) : "";
-		const char* pName = pLastGeometry->GetName() ? pLastGeometry->GetName() : "";
-		if (!kLoggedDecals.insert(std::string(pEditorID) + "/" + pName).second)
+		const char* pEditorID = "";
+
+		if (pBaseForm) {
+			pEditorID = GetEditorID(pBaseForm);
+		}
+
+		const char* pName = GetObjectName(pLastGeometry);
+
+		if (!kLoggedDecals.insert(std::string(pEditorID) + "/" + pName).second) {
 			return;
-		_MESSAGE("No depth writes: Geometry '%s' of '%s', %s.", pName, pEditorID, abAfterGeometry ? "after its own geometry, sets the tag" : "before its own geometry, keeps the tags");
+		}
+
+		const char* pOrder = "before its own geometry, keeps the tags";
+
+		if (abAfterGeometry) {
+			pOrder = "after its own geometry, sets the tag";
+		}
+
+		_MESSAGE("No depth writes: Geometry '%s' of '%s', %s.", pName, pEditorID, pOrder);
 	}
 
 	// Returns whether the coming draw has to leave the tags alone: a draw in the tagging window without depth writes.
@@ -347,18 +425,23 @@ namespace StencilTags {
 	// gets the overlay. Decal statics on their own draw no other geometry and keep the tags. Toppers are left out. Their
 	// decals would mark the base under them as topper.
 	bool KeepsTags() {
-		if (!pTaggingStates)
-			return false;
-
-		const bool bTerrainBlendPass = bInTaggedPass && pLastReference && uiLastTags == TERRAIN_BLEND_BIT;
-		if (NiDX9Renderer::GetSingleton()->m_pkRenderState->m_akRenderStateSettings[D3DRS_ZWRITEENABLE].m_uiCurrValue) {
-			if (bTerrainBlendPass)
-				kDrawnReferences.insert(pLastReference);
+		if (!pTaggingStates) {
 			return false;
 		}
 
-		if (!bTerrainBlendPass)
+		const bool bTerrainBlendPass = bInTaggedPass && pLastReference && uiLastTags == TERRAIN_BLEND_BIT;
+
+		if (NiDX9Renderer::GetSingleton()->m_pkRenderState->m_akRenderStateSettings[D3DRS_ZWRITEENABLE].m_uiCurrValue) {
+			if (bTerrainBlendPass) {
+				kDrawnReferences.insert(pLastReference);
+			}
+
+			return false;
+		}
+
+		if (!bTerrainBlendPass) {
 			return true;
+		}
 
 		const bool bAfterGeometry = kDrawnReferences.contains(pLastReference);
 		LogDecal(bAfterGeometry);
@@ -386,8 +469,10 @@ namespace StencilTags {
 		// Only tagging writes stencil between the start of the frame and the overlay pass.
 		// Clearing the whole buffer restores what the water passes expect.
 		// Verified in RenderDoc captures 02 and 03.
-		if (pTaggedTarget)
+		if (pTaggedTarget) {
 			apDevice->Clear(0, nullptr, D3DCLEAR_STENCIL, 0, 1.0f, 0);
+		}
+
 		pTaggedTarget = nullptr;
 	}
 

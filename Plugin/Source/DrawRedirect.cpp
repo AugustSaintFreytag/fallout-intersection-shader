@@ -148,14 +148,18 @@ namespace DrawRedirect {
 	// The game's shaders keep their constant tables. A shader without one reads neither.
 	static SamplerLayout GetSamplerLayout(IDirect3DPixelShader9* apShader) {
 		const auto it = kSamplerLayouts.find(apShader);
-		if (it != kSamplerLayouts.end())
+
+		if (it != kSamplerLayouts.end()) {
 			return it->second;
+		}
 
 		SamplerLayout kLayout = { NO_STAGE, NO_STAGE };
 		UINT uiSize = 0;
+
 		if (apShader && SUCCEEDED(apShader->GetFunction(nullptr, &uiSize)) && uiSize) {
 			std::vector<uint8_t> kFunction(uiSize);
 			ID3DXConstantTable* pTable = nullptr;
+
 			if (SUCCEEDED(apShader->GetFunction(kFunction.data(), &uiSize))
 				&& SUCCEEDED(D3DXGetShaderConstantTable(reinterpret_cast<const DWORD*>(kFunction.data()), &pTable))) {
 				kLayout.iBaseMap = GetSamplerStage(pTable, "BaseMap");
@@ -174,6 +178,7 @@ namespace DrawRedirect {
 		IDirect3DPixelShader9* pSavedPixelShader = nullptr;
 		apDevice->GetPixelShader(&pSavedPixelShader);
 		const SamplerLayout kLayout = GetSamplerLayout(pSavedPixelShader);
+
 		if (kLayout.iBaseMap == NO_STAGE) {
 			SafeRelease(pSavedPixelShader);
 			return D3D_OK;
@@ -238,8 +243,9 @@ namespace DrawRedirect {
 		}
 
 		if (eMode == MODE_OFF) {
-			if (!StencilTags::KeepsTags())
+			if (!StencilTags::KeepsTags()) {
 				return pOriginal(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
+			}
 
 			// Set on the device directly. The tagging window forces the write mask in the render state cache.
 			apDevice->SetRenderState(D3DRS_STENCILWRITEMASK, 0);
@@ -248,12 +254,17 @@ namespace DrawRedirect {
 			return hResult;
 		}
 		// With the terrain pixel shader, the pass would paint plain terrain over the target.
-		if (!pPassShader)
+		if (!pPassShader) {
 			return D3D_OK;
-		if (eMode == MODE_TOPPER_FEATURES)
+		}
+
+		if (eMode == MODE_TOPPER_FEATURES) {
 			return DrawWithFeatureShader(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
-		if (eMode == MODE_SHADER)
+		}
+
+		if (eMode == MODE_SHADER) {
 			return DrawWithPassShader(apDevice, aeType, aiBaseVertexIndex, auiMinVertexIndex, auiNumVertices, auiStartIndex, auiPrimitiveCount);
+		}
 
 		IDirect3DVertexShader9* pSavedShader = nullptr;
 		IDirect3DPixelShader9* pSavedPixelShader = nullptr;
@@ -265,8 +276,11 @@ namespace DrawRedirect {
 
 		if (bPassDrawn) {
 			uiSkipped++;
-			if (pSavedStream != pPassStream)
+
+			if (pSavedStream != pPassStream) {
 				uiForeign++;
+			}
+
 			SafeRelease(pSavedStream);
 			return D3D_OK;
 		}
@@ -300,6 +314,7 @@ namespace DrawRedirect {
 	// Call once the D3D device exists, at NVSE DeferredInit.
 	void Initialize() {
 		pVertexShader = Dependencies::CreateVertexShader("IntersectionBlend\\GroundQuad.vso");
+
 		if (!pVertexShader) {
 			_MESSAGE("Failed to load the ground quad vertex shader, terrain overlay disabled");
 			return;
@@ -311,6 +326,7 @@ namespace DrawRedirect {
 			{ 0, 0, D3DDECLTYPE_FLOAT3, D3DDECLMETHOD_DEFAULT, D3DDECLUSAGE_POSITION, 0 },
 			D3DDECL_END()
 		};
+
 		if (FAILED(pDevice->CreateVertexDeclaration(kElements, &pDeclaration))) {
 			_MESSAGE("Failed to create the ground quad vertex declaration, terrain overlay disabled");
 			return;
@@ -328,7 +344,12 @@ namespace DrawRedirect {
 	}
 
 	void SetMode(Mode aeMode) {
-		eMode = IsReady() ? aeMode : MODE_OFF;
+		eMode = MODE_OFF;
+
+		if (IsReady()) {
+			eMode = aeMode;
+		}
+
 		pPassShader = nullptr;
 		bPassDrawn = false;
 	}
